@@ -71,8 +71,8 @@ public:
 
         // -----------------------------------------------------------------------
         // Decode
-        ifid_reg->instr_out >> decode_exec->instr;
-        ifid_reg->instr2_out >> decode_data->instr;
+        ifid_reg->instr_out >> decode_data->instr;
+        ifid_reg->instr2_out >> decode_exec->instr;
 
         // -----------------------------------------------------------------------
         // Control signals
@@ -82,10 +82,22 @@ public:
         // -----------------------------------------------------------------------
         // Immediate
         decode_exec->opcode >> imm_exec->opcode;
-        ifid_reg->instr_out >> imm_exec->instr;
+        ifid_reg->instr2_out >> imm_exec->instr;
 
         decode_data->opcode >> imm_data->opcode;
-        ifid_reg->instr2_out >> imm_data->instr;
+        ifid_reg->instr_out >> imm_data->instr;
+
+        // -----------------------------------------------------------------------
+        // Way selection multiplexers
+        ifid_reg->instr_out >> data_way_instr->get(WaySrc::WAY1);
+        ifid_reg->instr2_out >> data_way_instr->get(WaySrc::WAY2);
+        control->data_way_src >> data_way_instr->select;
+        control->data_way_src >> data_way_opcode->select;
+
+        ifid_reg->instr_out >> exec_way_instr->get(WaySrc::WAY1);
+        ifid_reg->instr2_out >> exec_way_instr->get(WaySrc::WAY2);
+        control->exec_way_src >> exec_way_instr->select;
+        control->exec_way_src >> exec_way_opcode->select;
 
         // -----------------------------------------------------------------------
         // Registers
@@ -348,6 +360,11 @@ public:
     SUBCOMPONENT(alu_op2_data_src, TYPE(EnumMultiplexer<AluSrc2, RV_REG_WIDTH>));
     SUBCOMPONENT(reg1_fw_src, TYPE(EnumMultiplexer<ForwardingSrc, RV_REG_WIDTH>));
     SUBCOMPONENT(reg2_fw_src, TYPE(EnumMultiplexer<ForwardingSrc, RV_REG_WIDTH>));
+
+    SUBCOMPONENT(data_way_opcode, TYPE(EnumMultiplexer<WaySrc, RVInstr::width()>));
+    SUBCOMPONENT(data_way_instr, TYPE(EnumMultiplexer<WaySrc, RV_REG_WIDTH>));
+    SUBCOMPONENT(exec_way_opcode, TYPE(EnumMultiplexer<WaySrc, RVInstr::width()>));
+    SUBCOMPONENT(exec_way_instr, TYPE(EnumMultiplexer<WaySrc, RV_REG_WIDTH>));
 
     // Memories
     SUBCOMPONENT(instr_mem, TYPE(ROM_DUAL<RV_REG_WIDTH, RV_INSTR_WIDTH>));

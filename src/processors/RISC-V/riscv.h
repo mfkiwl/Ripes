@@ -30,6 +30,7 @@ Enum(RVInstr, NOP,
 Enum(ALUOp, NOP, ADD, SUB, MUL, DIV, AND, OR, XOR, SL, SRA, SRL, LUI, LT, LTU, EQ, MULH, MULHU, MULHSU, DIVU, REM,
      REMU);
 Enum(RegWrSrc, MEMREAD, ALURES, PC4);
+Enum(RegWrSrcDual, ALURES, PC4);
 Enum(AluSrc1, REG1, PC);
 Enum(AluSrc2, REG2, IMM);
 Enum(CompOp, NOP, EQ, NE, LT, LTU, GE, GEU);

@@ -10,7 +10,6 @@
 
 #include "../riscv.h"
 #include "../rv_alu.h"
-#include "../rv_branch.h"
 #include "../rv_control.h"
 #include "../rv_decode.h"
 #include "../rv_ecallchecker.h"
@@ -24,13 +23,14 @@
 #include "rv5s_dual_waycontrol.h"
 
 // Stage separating registers
+#include "rv5s_dual_branch.h"
 #include "rv5s_dual_exmem.h"
 #include "rv5s_dual_idex.h"
 #include "rv5s_dual_ifid.h"
 #include "rv5s_dual_memwb.h"
 
 // Forwarding & Hazard detection unit
-#include "../rv5s/rv5s_forwardingunit.h"
+#include "rv5s_dual_forwardingunit.h"
 #include "rv5s_dual_hazardunit.h"
 
 namespace vsrtl {
@@ -39,7 +39,7 @@ using namespace Ripes;
 
 class RV5S_DUAL : public RipesProcessor {
 public:
-    enum Stage { IF, ID, EX_EXEC, EX_DATA, MEM_EXEC, MEM_DATA, WB_EXEC, WB_DATA, STAGECOUNT };
+    enum Stage { IF_1, IF_2, ID_1, ID_2, EX_EXEC, EX_DATA, MEM_EXEC, MEM_DATA, WB_EXEC, WB_DATA, STAGECOUNT };
     RV5S_DUAL(const QStringList& extensions) : RipesProcessor("5-Stage Static Dual-issue RISC-V Processor") {
         m_enabledISA = std::make_shared<ISAInfo<ISA::RV32I>>(extensions);
         decode_way2->setISA(m_enabledISA);
@@ -47,6 +47,8 @@ public:
 
         // -----------------------------------------------------------------------
         // Program counter
+        pc_reg->out >> pc_8->op1;
+        8 >> pc_8->op2;
         pc_reg->out >> pc_4->op1;
         4 >> pc_4->op2;
         pc_src->out >> pc_reg->in;
@@ -56,9 +58,9 @@ public:
         // Note: pc_src works uses the PcSrc enum, but is selected by the boolean signal
         // from the controlflow OR gate. PcSrc enum values must adhere to the boolean
         // 0/1 values.
-        controlflow_or->out >> pc_src->select;
+        branch->pc_src >> pc_src->select;
 
-        controlflow_or->out >> *efsc_or->in[0];
+        branch->did_controlflow >> *efsc_or->in[0];
         ecallChecker->syscallExit >> *efsc_or->in[1];
 
         efsc_or->out >> *efschz_or->in[0];
@@ -81,11 +83,11 @@ public:
 
         // -----------------------------------------------------------------------
         // Immediate
-        decode_way2->opcode >> imm_exec->opcode;
-        ifid_reg->instr2_out >> imm_exec->instr;
+        exec_way_opcode->out >> imm_exec->opcode;
+        exec_way_instr->out >> imm_exec->instr;
 
-        decode_way1->opcode >> imm_data->opcode;
-        ifid_reg->instr_out >> imm_data->instr;
+        data_way_opcode->out >> imm_data->opcode;
+        data_way_instr->out >> imm_data->instr;
 
         // -----------------------------------------------------------------------
         // Way control
@@ -117,6 +119,14 @@ public:
         decode_way1->r2_reg_idx >> data_way_r2_reg_idx->get(WaySrc::WAY1);
         decode_way2->r2_reg_idx >> data_way_r2_reg_idx->get(WaySrc::WAY2);
 
+        waycontrol->data_way_src >> data_way_wr_reg_idx->select;
+        decode_way1->wr_reg_idx >> data_way_wr_reg_idx->get(WaySrc::WAY1);
+        decode_way2->wr_reg_idx >> data_way_wr_reg_idx->get(WaySrc::WAY2);
+
+        waycontrol->data_way_src >> data_way_pc->select;
+        ifid_reg->pc_out >> data_way_pc->get(WaySrc::WAY1);
+        ifid_reg->pc4_out >> data_way_pc->get(WaySrc::WAY2);
+
         waycontrol->exec_way_src >> exec_way_instr->select;
         ifid_reg->instr_out >> exec_way_instr->get(WaySrc::WAY1);
         ifid_reg->instr2_out >> exec_way_instr->get(WaySrc::WAY2);
@@ -133,19 +143,27 @@ public:
         decode_way1->r2_reg_idx >> exec_way_r2_reg_idx->get(WaySrc::WAY1);
         decode_way2->r2_reg_idx >> exec_way_r2_reg_idx->get(WaySrc::WAY2);
 
+        waycontrol->exec_way_src >> exec_way_pc->select;
+        ifid_reg->pc_out >> exec_way_pc->get(WaySrc::WAY1);
+        ifid_reg->pc4_out >> exec_way_pc->get(WaySrc::WAY2);
+
+        waycontrol->exec_way_src >> exec_way_wr_reg_idx->select;
+        decode_way1->wr_reg_idx >> exec_way_wr_reg_idx->get(WaySrc::WAY1);
+        decode_way2->wr_reg_idx >> exec_way_wr_reg_idx->get(WaySrc::WAY2);
+
         // -----------------------------------------------------------------------
         // Registers
 
         // Exec way
-        decode_way2->r1_reg_idx >> registerFile->r1_1_addr;
-        decode_way2->r2_reg_idx >> registerFile->r2_1_addr;
+        exec_way_r1_reg_idx->out >> registerFile->r1_1_addr;
+        exec_way_r2_reg_idx->out >> registerFile->r2_1_addr;
         reg_wr_src->out >> registerFile->data_1_in;
         memwb_reg->wr_reg_idx_out >> registerFile->wr_1_addr;
         memwb_reg->reg_do_write_out >> registerFile->wr_1_en;
 
         // Data way
-        decode_way1->r1_reg_idx >> registerFile->r1_2_addr;
-        decode_way1->r2_reg_idx >> registerFile->r2_2_addr;
+        data_way_r1_reg_idx->out >> registerFile->r1_2_addr;
+        data_way_r2_reg_idx->out >> registerFile->r2_2_addr;
         memwb_reg->mem_read_out >> registerFile->data_2_in;
         memwb_reg->wr_reg_idx_data_out >> registerFile->wr_2_addr;
         memwb_reg->reg_do_write_data_out >> registerFile->wr_2_en;
@@ -155,38 +173,38 @@ public:
         // -----------------------------------------------------------------------
         // Branch
         idex_reg->br_op_out >> branch->comp_op;
-        reg1_fw_src->out >> branch->op1;
-        reg2_fw_src->out >> branch->op2;
+        exec_reg1_fw_src->out >> branch->op1;
+        exec_reg2_fw_src->out >> branch->op2;
 
-        branch->res >> *br_and->in[0];
-        idex_reg->do_br_out >> *br_and->in[1];
-        br_and->out >> *controlflow_or->in[0];
-        idex_reg->do_jmp_out >> *controlflow_or->in[1];
+        idex_reg->do_jmp_out >> branch->do_jump;
+        idex_reg->do_br_out >> branch->do_branch;
 
-        pc_4->out >> pc_src->get(PcSrc::PC4);
-        alu->res >> pc_src->get(PcSrc::ALU);
+        pc_4->out >> pc_src->get(PcSrcDual::PC4);
+        pc_8->out >> pc_src->get(PcSrcDual::PC8);
+        alu->res >> pc_src->get(PcSrcDual::ALU);
 
         // -----------------------------------------------------------------------
         // Execution way ALU
 
         // Forwarding multiplexers
-        idex_reg->r1_out >> reg1_fw_src->get(ForwardingSrc::IdStage);
-        exmem_reg->alures_out >>
-            reg1_fw_src->get(ForwardingSrc::MemStage);  // Todo: Mem stage needs a mux to allow for AUIPC forwarding
-        reg_wr_src->out >> reg1_fw_src->get(ForwardingSrc::WbStage);
-        funit->alu_reg1_forwarding_ctrl >> reg1_fw_src->select;
+        idex_reg->r1_out >> exec_reg1_fw_src->get(ForwardingSrcDual::IdStage);
+        exmem_reg->alures_out >> exec_reg1_fw_src->get(ForwardingSrcDual::MemStage);
+        reg_wr_src->out >> exec_reg1_fw_src->get(ForwardingSrcDual::WbStageExec);
+        memwb_reg->mem_read_out >> exec_reg1_fw_src->get(ForwardingSrcDual::WbStageMem);
+        funit->alu_reg1_fw_ctrl_exec >> exec_reg1_fw_src->select;
 
-        idex_reg->r2_out >> reg2_fw_src->get(ForwardingSrc::IdStage);
-        exmem_reg->alures_out >> reg2_fw_src->get(ForwardingSrc::MemStage);
-        reg_wr_src->out >> reg2_fw_src->get(ForwardingSrc::WbStage);
-        funit->alu_reg2_forwarding_ctrl >> reg2_fw_src->select;
+        idex_reg->r2_out >> exec_reg2_fw_src->get(ForwardingSrcDual::IdStage);
+        exmem_reg->alures_out >> exec_reg2_fw_src->get(ForwardingSrcDual::MemStage);
+        reg_wr_src->out >> exec_reg2_fw_src->get(ForwardingSrcDual::WbStageExec);
+        memwb_reg->mem_read_out >> exec_reg2_fw_src->get(ForwardingSrcDual::WbStageMem);
+        funit->alu_reg2_fw_ctrl_exec >> exec_reg2_fw_src->select;
 
         // ALU operand multiplexers
-        reg1_fw_src->out >> alu_op1_exec_src->get(AluSrc1::REG1);
+        exec_reg1_fw_src->out >> alu_op1_exec_src->get(AluSrc1::REG1);
         idex_reg->pc_out >> alu_op1_exec_src->get(AluSrc1::PC);
         idex_reg->alu_op1_ctrl_out >> alu_op1_exec_src->select;
 
-        reg2_fw_src->out >> alu_op2_exec_src->get(AluSrc2::REG2);
+        exec_reg2_fw_src->out >> alu_op2_exec_src->get(AluSrc2::REG2);
         idex_reg->imm_out >> alu_op2_exec_src->get(AluSrc2::IMM);
         idex_reg->alu_op2_ctrl_out >> alu_op2_exec_src->select;
 
@@ -198,12 +216,25 @@ public:
         // -----------------------------------------------------------------------
         // Data way ALU
 
+        // Forwarding multiplexers
+        idex_reg->r1_data_out >> data_reg1_fw_src->get(ForwardingSrcDual::IdStage);
+        exmem_reg->alures_out >> data_reg1_fw_src->get(ForwardingSrcDual::MemStage);
+        reg_wr_src->out >> data_reg1_fw_src->get(ForwardingSrcDual::WbStageExec);
+        memwb_reg->mem_read_out >> data_reg1_fw_src->get(ForwardingSrcDual::WbStageMem);
+        funit->alu_reg1_fw_ctrl_data >> data_reg1_fw_src->select;
+
+        idex_reg->r2_data_out >> data_reg2_fw_src->get(ForwardingSrcDual::IdStage);
+        exmem_reg->alures_out >> data_reg2_fw_src->get(ForwardingSrcDual::MemStage);
+        reg_wr_src->out >> data_reg2_fw_src->get(ForwardingSrcDual::WbStageExec);
+        memwb_reg->mem_read_out >> data_reg2_fw_src->get(ForwardingSrcDual::WbStageMem);
+        funit->alu_reg2_fw_ctrl_data >> data_reg2_fw_src->select;
+
         // ALU operand multiplexers
-        reg1_fw_src->out >> alu_op1_data_src->get(AluSrc1::REG1);  // Todo: fix
+        data_reg1_fw_src->out >> alu_op1_data_src->get(AluSrc1::REG1);  // Todo: fix
         idex_reg->pc_out >> alu_op1_data_src->get(AluSrc1::PC);
         idex_reg->alu_op1_ctrl_data_out >> alu_op1_data_src->select;
 
-        reg2_fw_src->out >> alu_op2_data_src->get(AluSrc2::REG2);  // Todo: fix
+        data_reg2_fw_src->out >> alu_op2_data_src->get(AluSrc2::REG2);  // Todo: fix
         idex_reg->imm_data_out >> alu_op2_data_src->get(AluSrc2::IMM);
         idex_reg->alu_op2_ctrl_data_out >> alu_op2_data_src->select;
 
@@ -229,7 +260,7 @@ public:
 
         // -----------------------------------------------------------------------
         // IF/ID
-        pc_4->out >> ifid_reg->pc4_in;
+        pc_8->out >> ifid_reg->pc4_in;
         pc_reg->out >> ifid_reg->pc_in;
         instr_mem->data_out >> ifid_reg->instr_in;
         instr_mem->data_out2 >> ifid_reg->instr2_in;
@@ -244,24 +275,27 @@ public:
         efschz_or->out >> idex_reg->clear;
 
         // Data
-        ifid_reg->pc4_out >> idex_reg->pc4_in;
-        ifid_reg->pc_out >> idex_reg->pc_in;
+        ifid_reg->pc4_out >> idex_reg->pc4_in;  // actually pc8!
+        exec_way_pc->out >> idex_reg->pc_in;
+        data_way_pc->out >> idex_reg->pc_data_in;
         registerFile->r1_1_out >> idex_reg->r1_in;
         registerFile->r2_1_out >> idex_reg->r2_in;
-        registerFile->r1_2_out >> idex_reg->r1_2_in;
-        registerFile->r2_2_out >> idex_reg->r2_2_in;
+        registerFile->r1_2_out >> idex_reg->r1_data_in;
+        registerFile->r2_2_out >> idex_reg->r2_data_in;
 
         imm_exec->imm >> idex_reg->imm_in;
         imm_data->imm >> idex_reg->imm_data_in;
 
         // Control
-        decode_way2->wr_reg_idx >> idex_reg->wr_reg_idx_in;
+        exec_way_wr_reg_idx->out >> idex_reg->wr_reg_idx_in;
         0 >> idex_reg->reg_wr_src_ctrl_in;
         control->reg_wr_src_ctrl >> idex_reg->reg_wr_src_ctrl_dual_in;
         control->reg_do_write_ctrl_exec >> idex_reg->reg_do_write_in;
-        decode_way2->r1_reg_idx >> idex_reg->rd_reg1_idx_in;
-        decode_way2->r2_reg_idx >> idex_reg->rd_reg2_idx_in;
-        decode_way2->opcode >> idex_reg->opcode_in;
+        exec_way_r1_reg_idx->out >> idex_reg->rd_reg1_idx_in;
+        exec_way_r2_reg_idx->out >> idex_reg->rd_reg2_idx_in;
+        exec_way_opcode->out >> idex_reg->opcode_in;
+        data_way_r1_reg_idx->out >> idex_reg->rd_reg1_idx_data_in;
+        data_way_r2_reg_idx->out >> idex_reg->rd_reg2_idx_data_in;
 
         control->alu_op1_ctrl_exec >> idex_reg->alu_op1_ctrl_in;
         control->alu_op2_ctrl_exec >> idex_reg->alu_op2_ctrl_in;
@@ -292,9 +326,10 @@ public:
         mem_stalled_or->out >> exmem_reg->stalled_in;
 
         // Data
-        idex_reg->pc_out >> exmem_reg->pc_in;
+        idex_reg->pc_out >> exmem_reg->pc_in;        // @todo: Fix this - needs multiplexer aswell
+        idex_reg->pc4_out >> exmem_reg->pc_data_in;  //@todo: Fix this - needs multiplexer aswell
         idex_reg->pc4_out >> exmem_reg->pc4_in;
-        reg2_fw_src->out >> exmem_reg->r2_in;
+        exec_reg2_fw_src->out >> exmem_reg->r2_in;
         alu->res >> exmem_reg->alures_in;
 
         // Control
@@ -320,6 +355,7 @@ public:
 
         // Data
         exmem_reg->pc_out >> memwb_reg->pc_in;
+        exmem_reg->pc_data_out >> memwb_reg->pc_data_in;
         exmem_reg->pc4_out >> memwb_reg->pc4_in;
         exmem_reg->alures_out >> memwb_reg->alures_in;
         data_mem->data_out >> memwb_reg->mem_read_in;
@@ -336,21 +372,25 @@ public:
 
         // -----------------------------------------------------------------------
         // Forwarding unit
-        idex_reg->rd_reg1_idx_out >> funit->id_reg1_idx;
-        idex_reg->rd_reg2_idx_out >> funit->id_reg2_idx;
+        idex_reg->rd_reg1_idx_out >> funit->id_reg1_idx_exec;
+        idex_reg->rd_reg2_idx_out >> funit->id_reg2_idx_exec;
+        idex_reg->rd_reg1_idx_data_out >> funit->id_reg1_idx_data;
+        idex_reg->rd_reg2_idx_data_out >> funit->id_reg2_idx_data;
 
-        exmem_reg->wr_reg_idx_out >> funit->mem_reg_wr_idx;
-        exmem_reg->reg_do_write_out >> funit->mem_reg_wr_en;
+        exmem_reg->wr_reg_idx_out >> funit->mem_reg_wr_idx_exec;
+        exmem_reg->reg_do_write_out >> funit->mem_reg_wr_en_exec;
 
-        memwb_reg->wr_reg_idx_out >> funit->wb_reg_wr_idx;
-        memwb_reg->reg_do_write_out >> funit->wb_reg_wr_en;
+        memwb_reg->wr_reg_idx_out >> funit->wb_reg_wr_idx_exec;
+        memwb_reg->reg_do_write_out >> funit->wb_reg_wr_en_exec;
+        memwb_reg->wr_reg_idx_data_out >> funit->wb_reg_wr_idx_data;
+        memwb_reg->reg_do_write_data_out >> funit->wb_reg_wr_en_data;
 
         // -----------------------------------------------------------------------
         // Hazard detection unit
-        decode_way2->r1_reg_idx >> hzunit->id_reg1_idx_exec;
-        decode_way2->r2_reg_idx >> hzunit->id_reg2_idx_exec;
-        decode_way1->r1_reg_idx >> hzunit->id_reg1_idx_data;
-        decode_way1->r2_reg_idx >> hzunit->id_reg2_idx_data;
+        exec_way_r1_reg_idx->out >> hzunit->id_reg1_idx_exec;
+        exec_way_r2_reg_idx->out >> hzunit->id_reg2_idx_exec;
+        data_way_r1_reg_idx->out >> hzunit->id_reg1_idx_data;
+        data_way_r2_reg_idx->out >> hzunit->id_reg2_idx_data;
 
         idex_reg->mem_do_read_out >> hzunit->ex_do_mem_read_en;
         idex_reg->wr_reg_idx_data_out >> hzunit->ex_reg_wr_idx_data;
@@ -374,8 +414,9 @@ public:
     SUBCOMPONENT(imm_data, Immediate);
     SUBCOMPONENT(decode_way2, Decode);
     SUBCOMPONENT(decode_way1, Decode);
-    SUBCOMPONENT(branch, Branch);
+    SUBCOMPONENT(branch, Branch_DUAL);
     SUBCOMPONENT(pc_4, Adder<RV_REG_WIDTH>);
+    SUBCOMPONENT(pc_8, Adder<RV_REG_WIDTH>);
 
     // Registers
     SUBCOMPONENT(pc_reg, RegisterClEn<RV_REG_WIDTH>);
@@ -388,21 +429,29 @@ public:
 
     // Multiplexers
     SUBCOMPONENT(reg_wr_src, TYPE(EnumMultiplexer<RegWrSrcDual, RV_REG_WIDTH>));
-    SUBCOMPONENT(pc_src, TYPE(EnumMultiplexer<PcSrc, RV_REG_WIDTH>));
+    SUBCOMPONENT(pc_src, TYPE(EnumMultiplexer<PcSrcDual, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op1_exec_src, TYPE(EnumMultiplexer<AluSrc1, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op2_exec_src, TYPE(EnumMultiplexer<AluSrc2, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op1_data_src, TYPE(EnumMultiplexer<AluSrc1, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op2_data_src, TYPE(EnumMultiplexer<AluSrc2, RV_REG_WIDTH>));
-    SUBCOMPONENT(reg1_fw_src, TYPE(EnumMultiplexer<ForwardingSrc, RV_REG_WIDTH>));
-    SUBCOMPONENT(reg2_fw_src, TYPE(EnumMultiplexer<ForwardingSrc, RV_REG_WIDTH>));
 
+    SUBCOMPONENT(exec_reg1_fw_src, TYPE(EnumMultiplexer<ForwardingSrcDual, RV_REG_WIDTH>));
+    SUBCOMPONENT(exec_reg2_fw_src, TYPE(EnumMultiplexer<ForwardingSrcDual, RV_REG_WIDTH>));
+
+    SUBCOMPONENT(data_reg1_fw_src, TYPE(EnumMultiplexer<ForwardingSrcDual, RV_REG_WIDTH>));
+    SUBCOMPONENT(data_reg2_fw_src, TYPE(EnumMultiplexer<ForwardingSrcDual, RV_REG_WIDTH>));
+
+    SUBCOMPONENT(data_way_pc, TYPE(EnumMultiplexer<WaySrc, RV_REG_WIDTH>));
     SUBCOMPONENT(data_way_opcode, TYPE(EnumMultiplexer<WaySrc, RVInstr::width()>));
     SUBCOMPONENT(data_way_instr, TYPE(EnumMultiplexer<WaySrc, RV_REG_WIDTH>));
+    SUBCOMPONENT(data_way_wr_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
     SUBCOMPONENT(data_way_r1_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
     SUBCOMPONENT(data_way_r2_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
 
+    SUBCOMPONENT(exec_way_pc, TYPE(EnumMultiplexer<WaySrc, RV_REG_WIDTH>));
     SUBCOMPONENT(exec_way_opcode, TYPE(EnumMultiplexer<WaySrc, RVInstr::width()>));
     SUBCOMPONENT(exec_way_instr, TYPE(EnumMultiplexer<WaySrc, RV_REG_WIDTH>));
+    SUBCOMPONENT(exec_way_wr_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
     SUBCOMPONENT(exec_way_r1_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
     SUBCOMPONENT(exec_way_r2_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
 
@@ -411,14 +460,10 @@ public:
     SUBCOMPONENT(data_mem, TYPE(RVMemory<RV_REG_WIDTH, RV_REG_WIDTH>));
 
     // Forwarding & hazard detection units
-    SUBCOMPONENT(funit, ForwardingUnit);
+    SUBCOMPONENT(funit, ForwardingUnit_DUAL);
     SUBCOMPONENT(hzunit, HazardUnit_DUAL);
 
     // Gates
-    // True if branch instruction and branch taken
-    SUBCOMPONENT(br_and, TYPE(And<1, 2>));
-    // True if branch taken or jump instruction
-    SUBCOMPONENT(controlflow_or, TYPE(Or<1, 2>));
     // True if controlflow action or performing syscall finishing
     SUBCOMPONENT(efsc_or, TYPE(Or<1, 2>));
     // True if above or stalling due to load-use hazard
@@ -437,10 +482,12 @@ public:
     unsigned int getPcForStage(unsigned int idx) const override {
         // clang-format off
         switch (idx) {
-            case IF: return pc_reg->out.uValue();
-            case ID: return ifid_reg->pc_out.uValue();
+            case IF_1: return pc_reg->out.uValue();
+            case IF_2: return pc_reg->out.uValue() + 4;
+            case ID_1: return ifid_reg->pc_out.uValue();
+            case ID_2: return ifid_reg->pc4_out.uValue();
             case EX_EXEC: return idex_reg->pc_out.uValue();
-            case EX_DATA: return idex_reg->pc_data_out.uValue();
+            case EX_DATA: return idex_reg->pc4_out.uValue();
             case MEM_EXEC: return exmem_reg->pc_out.uValue();
             case MEM_DATA: return exmem_reg->pc_data_out.uValue();
             case WB_EXEC: return memwb_reg->pc_out.uValue();
@@ -454,8 +501,8 @@ public:
     QString stageName(unsigned int idx) const override {
         // clang-format off
         switch (idx) {
-            case IF: return "IF";
-            case ID: return "ID";
+            case IF_1: case IF_2: return "IF";
+            case ID_1: case ID_2: return "ID";
             case EX_EXEC: case EX_DATA: return "EX";
             case MEM_EXEC: case MEM_DATA: return "MEM";
             case WB_EXEC: case WB_DATA: return "WB";
@@ -472,24 +519,24 @@ public:
         // clang-format off
         // Has the stage been cleared?
         switch(stage){
-        case ID: stageValid &= ifid_reg->valid_out.uValue(); break;
+        case ID_1: case ID_2: stageValid &= ifid_reg->valid_out.uValue(); break;
         case EX_EXEC: case EX_DATA: stageValid &= idex_reg->valid_out.uValue(); break;
         case MEM_EXEC: case MEM_DATA: stageValid &= exmem_reg->valid_out.uValue(); break;
         case WB_EXEC: case WB_DATA: stageValid &= memwb_reg->valid_out.uValue(); break;
-        default: case IF: break;
+        default: case IF_1: case IF_2: break;
         }
 
         // Is the stage carrying a valid (executable) PC?
         /// @todo: also check for valid way (not cleared)
         switch(stage){
-        case ID: stageValid &= isExecutableAddress(ifid_reg->pc_out.uValue()); break;
+        case ID_1: case ID_2: stageValid &= isExecutableAddress(ifid_reg->pc_out.uValue()); break;
         case EX_EXEC: stageValid &= isExecutableAddress(idex_reg->pc_out.uValue()); break;
-        case EX_DATA: stageValid &= isExecutableAddress(idex_reg->pc_data_out.uValue()); break;
+        case EX_DATA: stageValid &= isExecutableAddress(idex_reg->pc4_out.uValue()); break;
         case MEM_EXEC: stageValid &= isExecutableAddress(exmem_reg->pc_out.uValue()); break;
         case MEM_DATA: stageValid &= isExecutableAddress(exmem_reg->pc_data_out.uValue()); break;
         case WB_EXEC: stageValid &= isExecutableAddress(memwb_reg->pc_out.uValue()); break;
         case WB_DATA: stageValid &= isExecutableAddress(memwb_reg->pc_data_out.uValue()); break;
-        default: case IF: stageValid &= isExecutableAddress(pc_reg->out.uValue()); break;
+        default: case IF_1: case IF_2: stageValid &= isExecutableAddress(pc_reg->out.uValue()); break;
         }
 
         // Are we currently clearing the pipeline due to a syscall exit? if such, all stages before the EX stage are invalid
@@ -501,10 +548,12 @@ public:
         // Gather stage state info
         StageInfo::State state = StageInfo ::State::None;
         switch (stage) {
-            case IF:
+            case IF_1:
+            case IF_2:
                 break;
-            case ID:
-                if (m_cycleCount > ID && ifid_reg->valid_out.uValue() == 0) {
+            case ID_1:
+            case ID_2:
+                if (m_cycleCount > (ID_1 / 2) && ifid_reg->valid_out.uValue() == 0) {
                     state = StageInfo::State::Flushed;
                 }
                 break;
@@ -512,7 +561,7 @@ public:
             case EX_DATA: {
                 if (idex_reg->stalled_out.uValue() == 1) {
                     state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > EX_EXEC && idex_reg->valid_out.uValue() == 0) {
+                } else if (m_cycleCount > (EX_EXEC / 2) && idex_reg->valid_out.uValue() == 0) {
                     state = StageInfo::State::Flushed;
                 }
                 break;
@@ -521,7 +570,7 @@ public:
             case MEM_EXEC: {
                 if (exmem_reg->stalled_out.uValue() == 1) {
                     state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > (MEM_EXEC - 1) && exmem_reg->valid_out.uValue() == 0) {
+                } else if (m_cycleCount > (MEM_EXEC / 2) && exmem_reg->valid_out.uValue() == 0) {
                     state = StageInfo::State::Flushed;
                 }
                 break;
@@ -530,7 +579,7 @@ public:
             case WB_EXEC: {
                 if (memwb_reg->stalled_out.uValue() == 1) {
                     state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > (WB_EXEC - 2) && memwb_reg->valid_out.uValue() == 0) {
+                } else if (m_cycleCount > (WB_EXEC / 2) && memwb_reg->valid_out.uValue() == 0) {
                     state = StageInfo::State::Flushed;
                 }
                 break;
@@ -563,7 +612,7 @@ public:
     bool finished() const override {
         // The processor is finished when there are no more valid instructions in the pipeline
         bool allStagesInvalid = true;
-        for (int stage = IF; stage < STAGECOUNT; stage++) {
+        for (int stage = IF_1; stage < STAGECOUNT; stage++) {
             allStagesInvalid &= !stageInfo(stage).stage_valid;
             if (!allStagesInvalid)
                 break;

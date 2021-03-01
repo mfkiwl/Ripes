@@ -37,6 +37,7 @@ Enum(CompOp, NOP, EQ, NE, LT, LTU, GE, GEU);
 Enum(MemOp, NOP, LB, LH, LW, LBU, LHU, SB, SH, SW);
 Enum(ECALL, none, print_int = 1, print_char = 2, print_string = 4, exit = 10);
 Enum(PcSrc, PC4 = 0, ALU = 1);
+Enum(PcSrcDual, PC4, PC8, ALU);
 Enum(WaySrc, WAY1, WAY2);
 
 /** Instruction field parser */

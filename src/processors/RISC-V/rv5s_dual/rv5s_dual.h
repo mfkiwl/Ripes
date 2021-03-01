@@ -39,7 +39,7 @@ using namespace Ripes;
 
 class RV5S_DUAL : public RipesProcessor {
 public:
-    enum Stage { IF = 0, ID = 1, EX = 2, MEM = 3, WB = 4, STAGECOUNT };
+    enum Stage { IF, ID, EX_EXEC, EX_DATA, MEM_EXEC, MEM_DATA, WB_EXEC, WB_DATA, STAGECOUNT };
     RV5S_DUAL(const QStringList& extensions) : RipesProcessor("5-Stage Static Dual-issue RISC-V Processor") {
         m_enabledISA = std::make_shared<ISAInfo<ISA::RV32I>>(extensions);
         decode_way2->setISA(m_enabledISA);
@@ -439,9 +439,12 @@ public:
         switch (idx) {
             case IF: return pc_reg->out.uValue();
             case ID: return ifid_reg->pc_out.uValue();
-            case EX: return idex_reg->pc_out.uValue();
-            case MEM: return exmem_reg->pc_out.uValue();
-            case WB: return memwb_reg->pc_out.uValue();
+            case EX_EXEC: return idex_reg->pc_out.uValue();
+            case EX_DATA: return idex_reg->pc_data_out.uValue();
+            case MEM_EXEC: return exmem_reg->pc_out.uValue();
+            case MEM_DATA: return exmem_reg->pc_data_out.uValue();
+            case WB_EXEC: return memwb_reg->pc_out.uValue();
+            case WB_DATA: return memwb_reg->pc_data_out.uValue();
             default: assert(false && "Processor does not contain stage");
         }
         Q_UNREACHABLE();
@@ -453,9 +456,9 @@ public:
         switch (idx) {
             case IF: return "IF";
             case ID: return "ID";
-            case EX: return "EX";
-            case MEM: return "MEM";
-            case WB: return "WB";
+            case EX_EXEC: case EX_DATA: return "EX";
+            case MEM_EXEC: case MEM_DATA: return "MEM";
+            case WB_EXEC: case WB_DATA: return "WB";
             default: assert(false && "Processor does not contain stage");
         }
         Q_UNREACHABLE();
@@ -470,23 +473,27 @@ public:
         // Has the stage been cleared?
         switch(stage){
         case ID: stageValid &= ifid_reg->valid_out.uValue(); break;
-        case EX: stageValid &= idex_reg->valid_out.uValue(); break;
-        case MEM: stageValid &= exmem_reg->valid_out.uValue(); break;
-        case WB: stageValid &= memwb_reg->valid_out.uValue(); break;
+        case EX_EXEC: case EX_DATA: stageValid &= idex_reg->valid_out.uValue(); break;
+        case MEM_EXEC: case MEM_DATA: stageValid &= exmem_reg->valid_out.uValue(); break;
+        case WB_EXEC: case WB_DATA: stageValid &= memwb_reg->valid_out.uValue(); break;
         default: case IF: break;
         }
 
         // Is the stage carrying a valid (executable) PC?
+        /// @todo: also check for valid way (not cleared)
         switch(stage){
         case ID: stageValid &= isExecutableAddress(ifid_reg->pc_out.uValue()); break;
-        case EX: stageValid &= isExecutableAddress(idex_reg->pc_out.uValue()); break;
-        case MEM: stageValid &= isExecutableAddress(exmem_reg->pc_out.uValue()); break;
-        case WB: stageValid &= isExecutableAddress(memwb_reg->pc_out.uValue()); break;
+        case EX_EXEC: stageValid &= isExecutableAddress(idex_reg->pc_out.uValue()); break;
+        case EX_DATA: stageValid &= isExecutableAddress(idex_reg->pc_data_out.uValue()); break;
+        case MEM_EXEC: stageValid &= isExecutableAddress(exmem_reg->pc_out.uValue()); break;
+        case MEM_DATA: stageValid &= isExecutableAddress(exmem_reg->pc_data_out.uValue()); break;
+        case WB_EXEC: stageValid &= isExecutableAddress(memwb_reg->pc_out.uValue()); break;
+        case WB_DATA: stageValid &= isExecutableAddress(memwb_reg->pc_data_out.uValue()); break;
         default: case IF: stageValid &= isExecutableAddress(pc_reg->out.uValue()); break;
         }
 
         // Are we currently clearing the pipeline due to a syscall exit? if such, all stages before the EX stage are invalid
-        if(stage < EX){
+        if(stage < EX_EXEC){
             stageValid &= !ecallChecker->isSysCallExiting();
         }
         // clang-format on
@@ -501,26 +508,29 @@ public:
                     state = StageInfo::State::Flushed;
                 }
                 break;
-            case EX: {
+            case EX_EXEC:
+            case EX_DATA: {
                 if (idex_reg->stalled_out.uValue() == 1) {
                     state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > EX && idex_reg->valid_out.uValue() == 0) {
+                } else if (m_cycleCount > EX_EXEC && idex_reg->valid_out.uValue() == 0) {
                     state = StageInfo::State::Flushed;
                 }
                 break;
             }
-            case MEM: {
+            case MEM_DATA:
+            case MEM_EXEC: {
                 if (exmem_reg->stalled_out.uValue() == 1) {
                     state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > MEM && exmem_reg->valid_out.uValue() == 0) {
+                } else if (m_cycleCount > (MEM_EXEC - 1) && exmem_reg->valid_out.uValue() == 0) {
                     state = StageInfo::State::Flushed;
                 }
                 break;
             }
-            case WB: {
+            case WB_DATA:
+            case WB_EXEC: {
                 if (memwb_reg->stalled_out.uValue() == 1) {
                     state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > WB && memwb_reg->valid_out.uValue() == 0) {
+                } else if (m_cycleCount > (WB_EXEC - 2) && memwb_reg->valid_out.uValue() == 0) {
                     state = StageInfo::State::Flushed;
                 }
                 break;

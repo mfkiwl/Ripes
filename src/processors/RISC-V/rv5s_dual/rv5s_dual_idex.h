@@ -25,6 +25,8 @@ public:
         CONNECT_REGISTERED_CLEN_INPUT(alu_ctrl_data, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(imm_data, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(reg_wr_src_ctrl_dual, clear, enable);
+
+        CONNECT_REGISTERED_CLEN_INPUT(pc_data, clear, enable);
     }
 
     REGISTERED_CLEN_INPUT(r1_2, RV_REG_WIDTH);
@@ -39,6 +41,8 @@ public:
     REGISTERED_CLEN_INPUT(alu_op1_ctrl_data, AluSrc1::width());
     REGISTERED_CLEN_INPUT(alu_op2_ctrl_data, AluSrc2::width());
     REGISTERED_CLEN_INPUT(alu_ctrl_data, ALUOp::width());
+
+    REGISTERED_CLEN_INPUT(pc_data, RV_REG_WIDTH);
 };
 
 }  // namespace core

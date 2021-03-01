@@ -12,11 +12,13 @@ public:
         CONNECT_REGISTERED_INPUT(wr_reg_idx_data);
         CONNECT_REGISTERED_INPUT(reg_do_write_data);
         CONNECT_REGISTERED_INPUT(reg_wr_src_ctrl_dual);
+        CONNECT_REGISTERED_INPUT(pc_data);
     }
 
     REGISTERED_INPUT(wr_reg_idx_data, RV_REGS_BITS);
     REGISTERED_INPUT(reg_do_write_data, 1);
     REGISTERED_INPUT(reg_wr_src_ctrl_dual, RegWrSrcDual::width());
+    REGISTERED_INPUT(pc_data, RV_REG_WIDTH);
 };
 
 }  // namespace core

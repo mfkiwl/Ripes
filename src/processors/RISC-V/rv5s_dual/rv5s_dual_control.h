@@ -8,23 +8,9 @@ namespace vsrtl {
 namespace core {
 using namespace Ripes;
 
-class Control_2I : public Component {
+class Control_DUAL : public Component {
 public:
-    static bool is_controlflow(const VSRTL_VT_U& opcode) {
-        return Control::do_jump_ctrl(opcode) || Control::do_branch_ctrl(opcode);
-    }
-
-    bool stall_exec() const {}
-
-    bool stall_data() const {
-        // Do not issue anything in data slot during control flow
-        if (is_controlflow(opcode_exec.uValue())) {
-            return true;
-        }
-    }
-
-public:
-    Control_2I(std::string name, SimComponent* parent) : Component(name, parent) {
+    Control_DUAL(std::string name, SimComponent* parent) : Component(name, parent) {
         comp_ctrl << [=] { return Control::do_comp_ctrl(opcode_exec.uValue()); };
         do_branch << [=] { return Control::do_branch_ctrl(opcode_exec.uValue()); };
         do_jump << [=] { return Control::do_jump_ctrl(opcode_exec.uValue()); };
@@ -50,11 +36,6 @@ public:
     INPUTPORT_ENUM(opcode_exec, RVInstr);
     INPUTPORT_ENUM(opcode_data, RVInstr);
 
-    INPUTPORT(r1_reg_idx_exec, RV_REGS_BITS);
-    INPUTPORT(r2_reg_idx_exec, RV_REGS_BITS);
-    INPUTPORT(r1_reg_idx_data, RV_REGS_BITS);
-    INPUTPORT(r2_reg_idx_data, RV_REGS_BITS);
-
     OUTPUTPORT(reg_do_write_ctrl_exec, 1);
     OUTPUTPORT_ENUM(reg_wr_src_ctrl, RegWrSrcDual);
 
@@ -74,12 +55,6 @@ public:
     OUTPUTPORT_ENUM(alu_op1_ctrl_data, AluSrc1);
     OUTPUTPORT_ENUM(alu_op2_ctrl_data, AluSrc2);
     OUTPUTPORT_ENUM(alu_ctrl_data, ALUOp);
-
-    OUTPUTPORT_ENUM(data_way_src, WaySrc);
-    OUTPUTPORT_ENUM(exec_way_src, WaySrc);
-
-    OUTPUTPORT(exec_way_valid, 1);
-    OUTPUTPORT(data_way_valid, 1);
 };
 
 }  // namespace core

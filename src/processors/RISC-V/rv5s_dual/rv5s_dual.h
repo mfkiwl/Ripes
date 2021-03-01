@@ -8,7 +8,6 @@
 
 #include "../../ripesprocessor.h"
 
-// Functional units
 #include "../riscv.h"
 #include "../rv_alu.h"
 #include "../rv_branch.h"
@@ -22,6 +21,7 @@
 #include "rv5s_dual_control.h"
 #include "rv5s_dual_instr_mem.h"
 #include "rv5s_dual_registerfile.h"
+#include "rv5s_dual_waycontrol.h"
 
 // Stage separating registers
 #include "rv5s_dual_exmem.h"
@@ -42,8 +42,8 @@ public:
     enum Stage { IF = 0, ID = 1, EX = 2, MEM = 3, WB = 4, STAGECOUNT };
     RV5S_DUAL(const QStringList& extensions) : RipesProcessor("5-Stage Static Dual-issue RISC-V Processor") {
         m_enabledISA = std::make_shared<ISAInfo<ISA::RV32I>>(extensions);
-        decode_exec->setISA(m_enabledISA);
-        decode_data->setISA(m_enabledISA);
+        decode_way2->setISA(m_enabledISA);
+        decode_way1->setISA(m_enabledISA);
 
         // -----------------------------------------------------------------------
         // Program counter
@@ -71,47 +71,81 @@ public:
 
         // -----------------------------------------------------------------------
         // Decode
-        ifid_reg->instr_out >> decode_data->instr;
-        ifid_reg->instr2_out >> decode_exec->instr;
+        ifid_reg->instr_out >> decode_way1->instr;
+        ifid_reg->instr2_out >> decode_way2->instr;
 
         // -----------------------------------------------------------------------
         // Control signals
-        decode_exec->opcode >> control->opcode_exec;
-        decode_data->opcode >> control->opcode_data;
+        exec_way_opcode->out >> control->opcode_exec;
+        data_way_opcode->out >> control->opcode_data;
 
         // -----------------------------------------------------------------------
         // Immediate
-        decode_exec->opcode >> imm_exec->opcode;
+        decode_way2->opcode >> imm_exec->opcode;
         ifid_reg->instr2_out >> imm_exec->instr;
 
-        decode_data->opcode >> imm_data->opcode;
+        decode_way1->opcode >> imm_data->opcode;
         ifid_reg->instr_out >> imm_data->instr;
 
         // -----------------------------------------------------------------------
+        // Way control
+        decode_way1->opcode >> waycontrol->opcode_way1;
+        decode_way1->wr_reg_idx >> waycontrol->wr_reg_idx_way1;
+        decode_way1->r1_reg_idx >> waycontrol->r1_reg_idx_way1;
+        decode_way1->r2_reg_idx >> waycontrol->r2_reg_idx_way1;
+
+        decode_way2->opcode >> waycontrol->opcode_way2;
+        decode_way2->wr_reg_idx >> waycontrol->wr_reg_idx_way2;
+        decode_way2->r1_reg_idx >> waycontrol->r1_reg_idx_way2;
+        decode_way2->r2_reg_idx >> waycontrol->r2_reg_idx_way2;
+
+        // -----------------------------------------------------------------------
         // Way selection multiplexers
+        waycontrol->data_way_src >> data_way_instr->select;
         ifid_reg->instr_out >> data_way_instr->get(WaySrc::WAY1);
         ifid_reg->instr2_out >> data_way_instr->get(WaySrc::WAY2);
-        control->data_way_src >> data_way_instr->select;
-        control->data_way_src >> data_way_opcode->select;
 
+        waycontrol->data_way_src >> data_way_opcode->select;
+        decode_way1->opcode >> data_way_opcode->get(WaySrc::WAY1);
+        decode_way2->opcode >> data_way_opcode->get(WaySrc::WAY2);
+
+        waycontrol->data_way_src >> data_way_r1_reg_idx->select;
+        decode_way1->r1_reg_idx >> data_way_r1_reg_idx->get(WaySrc::WAY1);
+        decode_way2->r1_reg_idx >> data_way_r1_reg_idx->get(WaySrc::WAY2);
+
+        waycontrol->data_way_src >> data_way_r2_reg_idx->select;
+        decode_way1->r2_reg_idx >> data_way_r2_reg_idx->get(WaySrc::WAY1);
+        decode_way2->r2_reg_idx >> data_way_r2_reg_idx->get(WaySrc::WAY2);
+
+        waycontrol->exec_way_src >> exec_way_instr->select;
         ifid_reg->instr_out >> exec_way_instr->get(WaySrc::WAY1);
         ifid_reg->instr2_out >> exec_way_instr->get(WaySrc::WAY2);
-        control->exec_way_src >> exec_way_instr->select;
-        control->exec_way_src >> exec_way_opcode->select;
+
+        waycontrol->exec_way_src >> exec_way_opcode->select;
+        decode_way1->opcode >> exec_way_opcode->get(WaySrc::WAY1);
+        decode_way2->opcode >> exec_way_opcode->get(WaySrc::WAY2);
+
+        waycontrol->exec_way_src >> exec_way_r1_reg_idx->select;
+        decode_way1->r1_reg_idx >> exec_way_r1_reg_idx->get(WaySrc::WAY1);
+        decode_way2->r1_reg_idx >> exec_way_r1_reg_idx->get(WaySrc::WAY2);
+
+        waycontrol->exec_way_src >> exec_way_r2_reg_idx->select;
+        decode_way1->r2_reg_idx >> exec_way_r2_reg_idx->get(WaySrc::WAY1);
+        decode_way2->r2_reg_idx >> exec_way_r2_reg_idx->get(WaySrc::WAY2);
 
         // -----------------------------------------------------------------------
         // Registers
 
         // Exec way
-        decode_exec->r1_reg_idx >> registerFile->r1_1_addr;
-        decode_exec->r2_reg_idx >> registerFile->r2_1_addr;
+        decode_way2->r1_reg_idx >> registerFile->r1_1_addr;
+        decode_way2->r2_reg_idx >> registerFile->r2_1_addr;
         reg_wr_src->out >> registerFile->data_1_in;
         memwb_reg->wr_reg_idx_out >> registerFile->wr_1_addr;
         memwb_reg->reg_do_write_out >> registerFile->wr_1_en;
 
         // Data way
-        decode_data->r1_reg_idx >> registerFile->r1_2_addr;
-        decode_data->r2_reg_idx >> registerFile->r2_2_addr;
+        decode_way1->r1_reg_idx >> registerFile->r1_2_addr;
+        decode_way1->r2_reg_idx >> registerFile->r2_2_addr;
         memwb_reg->mem_read_out >> registerFile->data_2_in;
         memwb_reg->wr_reg_idx_data_out >> registerFile->wr_2_addr;
         memwb_reg->reg_do_write_data_out >> registerFile->wr_2_en;
@@ -221,13 +255,13 @@ public:
         imm_data->imm >> idex_reg->imm_data_in;
 
         // Control
-        decode_exec->wr_reg_idx >> idex_reg->wr_reg_idx_in;
+        decode_way2->wr_reg_idx >> idex_reg->wr_reg_idx_in;
         0 >> idex_reg->reg_wr_src_ctrl_in;
         control->reg_wr_src_ctrl >> idex_reg->reg_wr_src_ctrl_dual_in;
         control->reg_do_write_ctrl_exec >> idex_reg->reg_do_write_in;
-        decode_exec->r1_reg_idx >> idex_reg->rd_reg1_idx_in;
-        decode_exec->r2_reg_idx >> idex_reg->rd_reg2_idx_in;
-        decode_exec->opcode >> idex_reg->opcode_in;
+        decode_way2->r1_reg_idx >> idex_reg->rd_reg1_idx_in;
+        decode_way2->r2_reg_idx >> idex_reg->rd_reg2_idx_in;
+        decode_way2->opcode >> idex_reg->opcode_in;
 
         control->alu_op1_ctrl_exec >> idex_reg->alu_op1_ctrl_in;
         control->alu_op2_ctrl_exec >> idex_reg->alu_op2_ctrl_in;
@@ -243,7 +277,7 @@ public:
         control->do_branch >> idex_reg->do_br_in;
         control->do_jump >> idex_reg->do_jmp_in;
 
-        decode_data->wr_reg_idx >> idex_reg->wr_reg_idx_data_in;
+        decode_way1->wr_reg_idx >> idex_reg->wr_reg_idx_data_in;
         control->reg_do_write_ctrl_data >> idex_reg->reg_do_write_data_in;
         control->mem_do_read_ctrl >> idex_reg->mem_do_read_in;
 
@@ -313,10 +347,10 @@ public:
 
         // -----------------------------------------------------------------------
         // Hazard detection unit
-        decode_exec->r1_reg_idx >> hzunit->id_reg1_idx_exec;
-        decode_exec->r2_reg_idx >> hzunit->id_reg2_idx_exec;
-        decode_data->r1_reg_idx >> hzunit->id_reg1_idx_data;
-        decode_data->r2_reg_idx >> hzunit->id_reg2_idx_data;
+        decode_way2->r1_reg_idx >> hzunit->id_reg1_idx_exec;
+        decode_way2->r2_reg_idx >> hzunit->id_reg2_idx_exec;
+        decode_way1->r1_reg_idx >> hzunit->id_reg1_idx_data;
+        decode_way1->r2_reg_idx >> hzunit->id_reg2_idx_data;
 
         idex_reg->mem_do_read_out >> hzunit->ex_do_mem_read_en;
         idex_reg->wr_reg_idx_data_out >> hzunit->ex_reg_wr_idx_data;
@@ -334,11 +368,12 @@ public:
     SUBCOMPONENT(registerFile, RegisterFile_DUAL<true>);
     SUBCOMPONENT(alu, ALU);
     SUBCOMPONENT(alu_data, ALU);
-    SUBCOMPONENT(control, Control_2I);
+    SUBCOMPONENT(control, Control_DUAL);
+    SUBCOMPONENT(waycontrol, WayControl);
     SUBCOMPONENT(imm_exec, Immediate);
     SUBCOMPONENT(imm_data, Immediate);
-    SUBCOMPONENT(decode_exec, Decode);
-    SUBCOMPONENT(decode_data, Decode);
+    SUBCOMPONENT(decode_way2, Decode);
+    SUBCOMPONENT(decode_way1, Decode);
     SUBCOMPONENT(branch, Branch);
     SUBCOMPONENT(pc_4, Adder<RV_REG_WIDTH>);
 
@@ -363,8 +398,13 @@ public:
 
     SUBCOMPONENT(data_way_opcode, TYPE(EnumMultiplexer<WaySrc, RVInstr::width()>));
     SUBCOMPONENT(data_way_instr, TYPE(EnumMultiplexer<WaySrc, RV_REG_WIDTH>));
+    SUBCOMPONENT(data_way_r1_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
+    SUBCOMPONENT(data_way_r2_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
+
     SUBCOMPONENT(exec_way_opcode, TYPE(EnumMultiplexer<WaySrc, RVInstr::width()>));
     SUBCOMPONENT(exec_way_instr, TYPE(EnumMultiplexer<WaySrc, RV_REG_WIDTH>));
+    SUBCOMPONENT(exec_way_r1_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
+    SUBCOMPONENT(exec_way_r2_reg_idx, TYPE(EnumMultiplexer<WaySrc, RV_REGS_BITS>));
 
     // Memories
     SUBCOMPONENT(instr_mem, TYPE(ROM_DUAL<RV_REG_WIDTH, RV_INSTR_WIDTH>));

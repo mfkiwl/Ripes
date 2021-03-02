@@ -38,10 +38,10 @@ public:
         pc_src << [=] {
             computeCycle();
             if (m_did_controlflow) {
-                return PcSrcDual::ALU;
+                return PcSrc::ALU;
             } else {
                 // Todo: Info from scheduling
-                return PcSrcDual::PC8;
+                return PcSrc::PC4;
             }
         };
 
@@ -56,7 +56,7 @@ public:
     INPUTPORT(op2, RV_REG_WIDTH);
     INPUTPORT(do_branch, 1);
     INPUTPORT(do_jump, 1);
-    OUTPUTPORT_ENUM(pc_src, PcSrcDual);
+    OUTPUTPORT_ENUM(pc_src, PcSrc);
     OUTPUTPORT(did_controlflow, 1);
 
 private:

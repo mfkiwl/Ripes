@@ -224,7 +224,7 @@ public:
         do_branch << [=] { return do_branch_ctrl(opcode.uValue()); };
         do_jump << [=] { return do_jump_ctrl(opcode.uValue()); };
         mem_ctrl << [=] { return do_mem_ctrl(opcode.uValue()); };
-        reg_do_write_ctrl << [=] { return do_reg_wr_src_ctrl(opcode.uValue()); };
+        reg_do_write_ctrl << [=] { return do_reg_do_write_ctrl(opcode.uValue()); };
         reg_wr_src_ctrl << [=] { return do_reg_wr_src_ctrl(opcode.uValue()); };
         alu_op1_ctrl << [=] { return do_alu_op1_ctrl(opcode.uValue()); };
         alu_op2_ctrl << [=] { return do_alu_op2_ctrl(opcode.uValue()); };

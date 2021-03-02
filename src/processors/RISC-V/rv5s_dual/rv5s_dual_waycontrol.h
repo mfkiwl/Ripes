@@ -76,24 +76,27 @@ private:
         // Default assignments
         WayClass way1Type = isLoadStore(opcode_way1.uValue()) ? WayClass::Data : WayClass::Exec;
         WayClass way2Type = isLoadStore(opcode_way2.uValue()) ? WayClass::Data : WayClass::Exec;
+        m_pcaddSrc = PcSrcDual::PC8;
 
         if (isControlflow(opcode_way1.uValue())) {
+            m_pcaddSrc = PcSrcDual::PC4;
             m_dataWayValid = false;
-            m_dataWaySrc = WaySrc::WAY1;
             m_execWayValid = true;
-            m_execWaySrc = WaySrc::WAY2;
+            m_execWaySrc = WaySrc::WAY1;
         } else if (way1Type == way2Type) {
             // Always schedule way 1 instruction (execute in-order)
             m_dataWayValid = way1Type == WayClass::Data;
             m_dataWaySrc = WaySrc::WAY1;
             m_execWayValid = way1Type == WayClass::Exec;
             m_execWaySrc = WaySrc::WAY1;
+            m_pcaddSrc = PcSrcDual::PC4;
         } else if (warHazard()) {
             // WAR hazard
             m_dataWayValid = way1Type == WayClass::Data;
             m_execWayValid = way1Type == WayClass::Exec;
             m_dataWaySrc = WaySrc::WAY1;
             m_execWaySrc = WaySrc::WAY1;
+            m_pcaddSrc = PcSrcDual::PC4;
         } else {
             // Can schedule both
             m_dataWayValid = true;
@@ -125,6 +128,11 @@ public:
             return m_execWaySrc;
         };
 
+        pcadd_src << [=] {
+            computeCycle();
+            return m_pcaddSrc;
+        };
+
         m_design = getDesign();
         Q_ASSERT(m_design != nullptr);
     }
@@ -146,6 +154,8 @@ public:
     OUTPUTPORT(exec_way_valid, 1);
     OUTPUTPORT(data_way_valid, 1);
 
+    OUTPUTPORT_ENUM(pcadd_src, PcSrcDual);
+
 private:
     SimDesign* m_design;
 
@@ -156,6 +166,7 @@ private:
     bool m_execWayValid;
     WaySrc m_execWaySrc = WaySrc::WAY1;
     WaySrc m_dataWaySrc = WaySrc::WAY1;
+    PcSrcDual m_pcaddSrc = PcSrcDual::PC8;
 };
 
 }  // namespace core

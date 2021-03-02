@@ -13,12 +13,15 @@ public:
         CONNECT_REGISTERED_CLEN_INPUT(reg_do_write_data, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(reg_wr_src_ctrl_dual, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(pc_data, clear, enable);
+        CONNECT_REGISTERED_CLEN_INPUT(alures_data, clear, enable);
     }
 
     REGISTERED_CLEN_INPUT(wr_reg_idx_data, RV_REGS_BITS);
     REGISTERED_CLEN_INPUT(reg_do_write_data, 1);
     REGISTERED_CLEN_INPUT(reg_wr_src_ctrl_dual, RegWrSrcDual::width());
     REGISTERED_CLEN_INPUT(pc_data, RV_REG_WIDTH);
+
+    REGISTERED_CLEN_INPUT(alures_data, RV_REG_WIDTH);
 };
 
 }  // namespace core

@@ -51,9 +51,16 @@ public:
         8 >> pc_8->op2;
         pc_reg->out >> pc_4->op1;
         4 >> pc_4->op2;
+
         pc_src->out >> pc_reg->in;
         0 >> pc_reg->clear;
         hzunit->hazardFEEnable >> pc_reg->enable;
+
+        waycontrol->pcadd_src >> pcadd_src->select;
+        pc_4->out >> pcadd_src->get(PcSrcDual::PC4);
+        pc_8->out >> pcadd_src->get(PcSrcDual::PC8);
+        alu->res >> pc_src->get(PcSrc::ALU);
+        pcadd_src->out >> pc_src->get(PcSrc::PC4);
 
         // Note: pc_src works uses the PcSrc enum, but is selected by the boolean signal
         // from the controlflow OR gate. PcSrc enum values must adhere to the boolean
@@ -179,10 +186,6 @@ public:
         idex_reg->do_jmp_out >> branch->do_jump;
         idex_reg->do_br_out >> branch->do_branch;
 
-        pc_4->out >> pc_src->get(PcSrcDual::PC4);
-        pc_8->out >> pc_src->get(PcSrcDual::PC8);
-        alu->res >> pc_src->get(PcSrcDual::ALU);
-
         // -----------------------------------------------------------------------
         // Execution way ALU
 
@@ -245,7 +248,7 @@ public:
 
         // -----------------------------------------------------------------------
         // Data memory
-        exmem_reg->alures_out >> data_mem->addr;
+        exmem_reg->alures_data_out >> data_mem->addr;
         exmem_reg->mem_do_write_out >> data_mem->wr_en;
         exmem_reg->r2_out >> data_mem->data_in;
         exmem_reg->mem_op_out >> data_mem->op;
@@ -288,7 +291,7 @@ public:
 
         // Control
         exec_way_wr_reg_idx->out >> idex_reg->wr_reg_idx_in;
-        0 >> idex_reg->reg_wr_src_ctrl_in;
+        0 >> idex_reg->reg_wr_src_ctrl_in;  // unused - we're using the specialized RegWrSrcDual
         control->reg_wr_src_ctrl >> idex_reg->reg_wr_src_ctrl_dual_in;
         control->reg_do_write_ctrl_exec >> idex_reg->reg_do_write_in;
         exec_way_r1_reg_idx->out >> idex_reg->rd_reg1_idx_in;
@@ -296,6 +299,9 @@ public:
         exec_way_opcode->out >> idex_reg->opcode_in;
         data_way_r1_reg_idx->out >> idex_reg->rd_reg1_idx_data_in;
         data_way_r2_reg_idx->out >> idex_reg->rd_reg2_idx_data_in;
+
+        waycontrol->exec_way_valid >> control->exec_valid;
+        waycontrol->data_way_valid >> control->data_valid;
 
         control->alu_op1_ctrl_exec >> idex_reg->alu_op1_ctrl_in;
         control->alu_op2_ctrl_exec >> idex_reg->alu_op2_ctrl_in;
@@ -329,11 +335,12 @@ public:
         idex_reg->pc_out >> exmem_reg->pc_in;        // @todo: Fix this - needs multiplexer aswell
         idex_reg->pc4_out >> exmem_reg->pc_data_in;  //@todo: Fix this - needs multiplexer aswell
         idex_reg->pc4_out >> exmem_reg->pc4_in;
-        exec_reg2_fw_src->out >> exmem_reg->r2_in;
+        data_reg2_fw_src->out >> exmem_reg->r2_in;
         alu->res >> exmem_reg->alures_in;
+        alu_data->res >> exmem_reg->alures_data_in;
 
         // Control
-        0 >> exmem_reg->reg_wr_src_ctrl_in;  // unused
+        0 >> exmem_reg->reg_wr_src_ctrl_in;  // unused - we're using the specialized RegWrSrcDual
         idex_reg->reg_wr_src_ctrl_dual_out >> exmem_reg->reg_wr_src_ctrl_dual_in;
         idex_reg->wr_reg_idx_out >> exmem_reg->wr_reg_idx_in;
         idex_reg->reg_do_write_out >> exmem_reg->reg_do_write_in;
@@ -361,7 +368,7 @@ public:
         data_mem->data_out >> memwb_reg->mem_read_in;
 
         // Control
-        0 >> memwb_reg->reg_wr_src_ctrl_in;  // unused
+        0 >> memwb_reg->reg_wr_src_ctrl_in;  // unused - we're using the specialized RegWrSrcDual
         exmem_reg->reg_wr_src_ctrl_dual_out >> memwb_reg->reg_wr_src_ctrl_dual_in;
         exmem_reg->wr_reg_idx_out >> memwb_reg->wr_reg_idx_in;
         exmem_reg->reg_do_write_out >> memwb_reg->reg_do_write_in;
@@ -429,7 +436,8 @@ public:
 
     // Multiplexers
     SUBCOMPONENT(reg_wr_src, TYPE(EnumMultiplexer<RegWrSrcDual, RV_REG_WIDTH>));
-    SUBCOMPONENT(pc_src, TYPE(EnumMultiplexer<PcSrcDual, RV_REG_WIDTH>));
+    SUBCOMPONENT(pc_src, TYPE(EnumMultiplexer<PcSrc, RV_REG_WIDTH>));
+    SUBCOMPONENT(pcadd_src, TYPE(EnumMultiplexer<PcSrcDual, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op1_exec_src, TYPE(EnumMultiplexer<AluSrc1, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op2_exec_src, TYPE(EnumMultiplexer<AluSrc2, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op1_data_src, TYPE(EnumMultiplexer<AluSrc1, RV_REG_WIDTH>));
@@ -514,7 +522,7 @@ public:
     StageInfo stageInfo(unsigned int stage) const override {
         bool stageValid = true;
         // Has the pipeline stage been filled?
-        stageValid &= stage <= m_cycleCount;
+        stageValid &= (stage / 2) <= m_cycleCount;
 
         // clang-format off
         // Has the stage been cleared?
@@ -529,7 +537,8 @@ public:
         // Is the stage carrying a valid (executable) PC?
         /// @todo: also check for valid way (not cleared)
         switch(stage){
-        case ID_1: case ID_2: stageValid &= isExecutableAddress(ifid_reg->pc_out.uValue()); break;
+        case ID_1: stageValid &= isExecutableAddress(ifid_reg->pc_out.uValue()); break;
+        case ID_2: stageValid &= isExecutableAddress(ifid_reg->pc4_out.uValue()); break;
         case EX_EXEC: stageValid &= isExecutableAddress(idex_reg->pc_out.uValue()); break;
         case EX_DATA: stageValid &= isExecutableAddress(idex_reg->pc4_out.uValue()); break;
         case MEM_EXEC: stageValid &= isExecutableAddress(exmem_reg->pc_out.uValue()); break;

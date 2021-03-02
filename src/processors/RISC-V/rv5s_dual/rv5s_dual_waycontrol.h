@@ -48,7 +48,7 @@ private:
     }
     // clang-format on
 
-    bool warHazard() const {
+    bool rawHazard() const {
         const unsigned wridx_1 = wr_reg_idx_way1.uValue();
         const unsigned wridx_2 = wr_reg_idx_way2.uValue();
 
@@ -60,7 +60,7 @@ private:
         // way1 write => way 2 read?
         const bool hazard_1 = (wridx_1 == idx1_2 || wridx_1 == idx2_2) && isWriteRegInstr(opcode_way1.uValue());
         // way2 write => way 1 read?
-        const bool hazard_2 = (wridx_2 == idx1_1 || wridx_2 == idx2_1) && isWriteRegInstr(opcode_way1.uValue());
+        const bool hazard_2 = (wridx_2 == idx1_1 || wridx_2 == idx2_1) && isWriteRegInstr(opcode_way2.uValue());
 
         return hazard_1 || hazard_2;
     }
@@ -76,10 +76,8 @@ private:
         // Default assignments
         WayClass way1Type = isLoadStore(opcode_way1.uValue()) ? WayClass::Data : WayClass::Exec;
         WayClass way2Type = isLoadStore(opcode_way2.uValue()) ? WayClass::Data : WayClass::Exec;
-        m_pcaddSrc = PcSrcDual::PC8;
 
         if (isControlflow(opcode_way1.uValue())) {
-            m_pcaddSrc = PcSrcDual::PC4;
             m_dataWayValid = false;
             m_execWayValid = true;
             m_execWaySrc = WaySrc::WAY1;
@@ -89,14 +87,12 @@ private:
             m_dataWaySrc = WaySrc::WAY1;
             m_execWayValid = way1Type == WayClass::Exec;
             m_execWaySrc = WaySrc::WAY1;
-            m_pcaddSrc = PcSrcDual::PC4;
-        } else if (warHazard()) {
+        } else if (rawHazard()) {
             // WAR hazard
             m_dataWayValid = way1Type == WayClass::Data;
             m_execWayValid = way1Type == WayClass::Exec;
             m_dataWaySrc = WaySrc::WAY1;
             m_execWaySrc = WaySrc::WAY1;
-            m_pcaddSrc = PcSrcDual::PC4;
         } else {
             // Can schedule both
             m_dataWayValid = true;
@@ -128,11 +124,6 @@ public:
             return m_execWaySrc;
         };
 
-        pcadd_src << [=] {
-            computeCycle();
-            return m_pcaddSrc;
-        };
-
         m_design = getDesign();
         Q_ASSERT(m_design != nullptr);
     }
@@ -154,8 +145,6 @@ public:
     OUTPUTPORT(exec_way_valid, 1);
     OUTPUTPORT(data_way_valid, 1);
 
-    OUTPUTPORT_ENUM(pcadd_src, PcSrcDual);
-
 private:
     SimDesign* m_design;
 
@@ -166,7 +155,6 @@ private:
     bool m_execWayValid;
     WaySrc m_execWaySrc = WaySrc::WAY1;
     WaySrc m_dataWaySrc = WaySrc::WAY1;
-    PcSrcDual m_pcaddSrc = PcSrcDual::PC8;
 };
 
 }  // namespace core

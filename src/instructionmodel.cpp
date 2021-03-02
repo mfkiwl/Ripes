@@ -28,16 +28,18 @@ void InstructionModel::processorWasClocked() {
 
 void InstructionModel::gatherStageInfo() {
     bool firstStageChanged = false;
-    for (int i = 0; i < m_stageNames.length(); i++) {
+    for (unsigned i = 0; i < ProcessorHandler::get()->getProcessor()->stageCount(); i++) {
         if (i == 0) {
             if (m_stageInfos[m_stageNames[i]].pc != ProcessorHandler::get()->getProcessor()->stageInfo(i).pc) {
                 firstStageChanged = true;
             }
         }
-        m_stageInfos[m_stageNames[i]] = ProcessorHandler::get()->getProcessor()->stageInfo(i);
-        if (firstStageChanged) {
-            emit firstStageInstrChanged(m_stageInfos[m_stageNames[0]].pc);
-            firstStageChanged = false;
+        if (m_stageNames.size() > i) {
+            m_stageInfos[m_stageNames[i]] = ProcessorHandler::get()->getProcessor()->stageInfo(i);
+            if (firstStageChanged) {
+                emit firstStageInstrChanged(m_stageInfos[m_stageNames[0]].pc);
+                firstStageChanged = false;
+            }
         }
     }
 }

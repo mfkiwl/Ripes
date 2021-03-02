@@ -56,11 +56,8 @@ public:
         0 >> pc_reg->clear;
         hzunit->hazardFEEnable >> pc_reg->enable;
 
-        waycontrol->pcadd_src >> pcadd_src->select;
-        pc_4->out >> pcadd_src->get(PcSrcDual::PC4);
-        pc_8->out >> pcadd_src->get(PcSrcDual::PC8);
         alu->res >> pc_src->get(PcSrc::ALU);
-        pcadd_src->out >> pc_src->get(PcSrc::PC4);
+        pc_8->out >> pc_src->get(PcSrc::PC4);
 
         // Note: pc_src works uses the PcSrc enum, but is selected by the boolean signal
         // from the controlflow OR gate. PcSrc enum values must adhere to the boolean
@@ -263,7 +260,7 @@ public:
 
         // -----------------------------------------------------------------------
         // IF/ID
-        pc_8->out >> ifid_reg->pc4_in;
+        pc_4->out >> ifid_reg->pc4_in;
         pc_reg->out >> ifid_reg->pc_in;
         instr_mem->data_out >> ifid_reg->instr_in;
         instr_mem->data_out2 >> ifid_reg->instr2_in;
@@ -322,6 +319,8 @@ public:
         control->mem_do_read_ctrl >> idex_reg->mem_do_read_in;
 
         ifid_reg->valid_out >> idex_reg->valid_in;
+        waycontrol->data_way_valid >> idex_reg->data_valid_in;
+        waycontrol->exec_way_valid >> idex_reg->exec_valid_in;
 
         // -----------------------------------------------------------------------
         // EX/MEM
@@ -351,6 +350,8 @@ public:
         idex_reg->wr_reg_idx_data_out >> exmem_reg->wr_reg_idx_data_in;
 
         idex_reg->valid_out >> exmem_reg->valid_in;
+        idex_reg->data_valid_out >> exmem_reg->data_valid_in;
+        idex_reg->exec_valid_out >> exmem_reg->exec_valid_in;
 
         // -----------------------------------------------------------------------
         // MEM/WB
@@ -376,6 +377,8 @@ public:
         exmem_reg->wr_reg_idx_data_out >> memwb_reg->wr_reg_idx_data_in;
 
         exmem_reg->valid_out >> memwb_reg->valid_in;
+        exmem_reg->data_valid_out >> memwb_reg->data_valid_in;
+        exmem_reg->exec_valid_out >> memwb_reg->exec_valid_in;
 
         // -----------------------------------------------------------------------
         // Forwarding unit
@@ -437,7 +440,6 @@ public:
     // Multiplexers
     SUBCOMPONENT(reg_wr_src, TYPE(EnumMultiplexer<RegWrSrcDual, RV_REG_WIDTH>));
     SUBCOMPONENT(pc_src, TYPE(EnumMultiplexer<PcSrc, RV_REG_WIDTH>));
-    SUBCOMPONENT(pcadd_src, TYPE(EnumMultiplexer<PcSrcDual, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op1_exec_src, TYPE(EnumMultiplexer<AluSrc1, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op2_exec_src, TYPE(EnumMultiplexer<AluSrc2, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op1_data_src, TYPE(EnumMultiplexer<AluSrc1, RV_REG_WIDTH>));
@@ -633,12 +635,25 @@ public:
         setSynchronousValue(registerFile->rf_1->_wr_mem, i, v);
     }
 
+    int instructionsRetired() const {
+        int amount = 0;
+        // An instruction has been retired if the instruction in the WB stage is valid and the PC is within the
+        // executable range of the program
+        if (memwb_reg->valid_out.uValue() != 0) {
+            if (isExecutableAddress(memwb_reg->pc_out.uValue()) && memwb_reg->exec_valid_out.uValue()) {
+                amount++;
+            }
+            if (isExecutableAddress(memwb_reg->pc4_out.uValue()) && memwb_reg->data_valid_out.uValue()) {
+                amount++;
+            }
+        }
+        return amount;
+    }
+
     void clock() override {
         // An instruction has been retired if the instruction in the WB stage is valid and the PC is within the
         // executable range of the program
-        if (memwb_reg->valid_out.uValue() != 0 && isExecutableAddress(memwb_reg->pc_out.uValue())) {
-            m_instructionsRetired++;
-        }
+        m_instructionsRetired += instructionsRetired();
 
         RipesProcessor::clock();
     }
@@ -651,9 +666,7 @@ public:
             m_syscallExitCycle = -1;
         }
         RipesProcessor::reverse();
-        if (memwb_reg->valid_out.uValue() != 0 && isExecutableAddress(memwb_reg->pc_out.uValue())) {
-            m_instructionsRetired--;
-        }
+        m_instructionsRetired -= instructionsRetired();
     }
 
     void reset() override {

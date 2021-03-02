@@ -98,11 +98,13 @@ private:
         desc = ProcessorDescription();
         desc.id = ProcessorID::RV5S_DUAL;
         desc.isa = vsrtl::core::RV5S_DUAL::ISA();
-        desc.name = "5-Stage static dual-issue";
+        desc.name = "5-Stage Static Dual-issue";
         desc.description =
             "A 5-Stage static dual-issue in-order processor static. The processor may issue an ALU/branch instruction "
             "in parallel with a load/store instruction.";
-        desc.layouts = {};
+        desc.layouts = {{"Extended",
+                         ":/layouts/RISC-V/rv5s_dual/rv5s_dual_extended_layout.json",
+                         {0.08, 0.28, 0.54, 0.78, 0.9, 0.08, 0.28, 0.54, 0.78, 0.9}}};
         desc.defaultRegisterVals = {{2, 0x7ffffff0}, {3, 0x10000000}};
         m_descriptions[desc.id] = desc;
 

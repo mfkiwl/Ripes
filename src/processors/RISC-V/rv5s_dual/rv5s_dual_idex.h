@@ -30,6 +30,7 @@ public:
         CONNECT_REGISTERED_CLEN_INPUT(rd_reg2_idx_data, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(exec_valid, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(data_valid, clear, enable);
+        CONNECT_REGISTERED_CLEN_INPUT(way_stall, clear, enable);
     }
 
     REGISTERED_CLEN_INPUT(pc_data, RV_REG_WIDTH);
@@ -52,6 +53,8 @@ public:
 
     REGISTERED_CLEN_INPUT(exec_valid, 1);
     REGISTERED_CLEN_INPUT(data_valid, 1);
+
+    REGISTERED_CLEN_INPUT(way_stall, 1);
 };
 
 }  // namespace core

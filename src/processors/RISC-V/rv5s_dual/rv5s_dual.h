@@ -54,7 +54,14 @@ public:
 
         pc_src->out >> pc_reg->in;
         0 >> pc_reg->clear;
-        hzunit->hazardFEEnable >> pc_reg->enable;
+
+        ifid_reg->valid_out >> *wayhazard->in[0];
+        waycontrol->stall_out >> *wayhazard->in[1];
+        wayhazard->out >> *wayhazard_inv->in[0];
+
+        hzunit->hazardFEEnable >> *pc_enabled->in[0];
+        wayhazard_inv->out >> *pc_enabled->in[1];
+        pc_enabled->out >> pc_reg->enable;
 
         alu->res >> pc_src->get(PcSrc::ALU);
         pc_8->out >> pc_src->get(PcSrc::PC4);
@@ -104,6 +111,8 @@ public:
         decode_way2->wr_reg_idx >> waycontrol->wr_reg_idx_way2;
         decode_way2->r1_reg_idx >> waycontrol->r1_reg_idx_way2;
         decode_way2->r2_reg_idx >> waycontrol->r2_reg_idx_way2;
+        idex_reg->way_stall_out >> waycontrol->stall_in;
+        ifid_reg->valid_out >> waycontrol->ifid_valid;
 
         // -----------------------------------------------------------------------
         // Way selection multiplexers
@@ -321,6 +330,7 @@ public:
         ifid_reg->valid_out >> idex_reg->valid_in;
         waycontrol->data_way_valid >> idex_reg->data_valid_in;
         waycontrol->exec_way_valid >> idex_reg->exec_valid_in;
+        waycontrol->stall_out >> idex_reg->way_stall_in;
 
         // -----------------------------------------------------------------------
         // EX/MEM
@@ -480,6 +490,11 @@ public:
     SUBCOMPONENT(efschz_or, TYPE(Or<1, 2>));
 
     SUBCOMPONENT(mem_stalled_or, TYPE(Or<1, 2>));
+
+    // True if no hazard in the ID stage or no hazard unit induced stall
+    SUBCOMPONENT(pc_enabled, TYPE(And<1, 2>));
+    SUBCOMPONENT(wayhazard, TYPE(And<1, 2>));
+    SUBCOMPONENT(wayhazard_inv, TYPE(Not<1, 1>));
 
     // Address spaces
     ADDRESSSPACE(m_memory);

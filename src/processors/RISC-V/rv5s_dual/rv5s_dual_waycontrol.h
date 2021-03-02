@@ -77,28 +77,39 @@ private:
         WayClass way1Type = isLoadStore(opcode_way1.uValue()) ? WayClass::Data : WayClass::Exec;
         WayClass way2Type = isLoadStore(opcode_way2.uValue()) ? WayClass::Data : WayClass::Exec;
 
-        if (isControlflow(opcode_way1.uValue())) {
+        const bool stallNow = stall_in.uValue();
+        if (stallNow) {
+            m_dataWayValid = way2Type == WayClass::Data;
+            m_dataWaySrc = WaySrc::WAY2;
+            m_execWayValid = way2Type == WayClass::Exec;
+            m_execWaySrc = WaySrc::WAY2;
+            m_stall = false;
+        } else if (isControlflow(opcode_way1.uValue())) {
             m_dataWayValid = false;
             m_execWayValid = true;
             m_execWaySrc = WaySrc::WAY1;
+            m_stall = true && ifid_valid.uValue();
         } else if (way1Type == way2Type) {
             // Always schedule way 1 instruction (execute in-order)
             m_dataWayValid = way1Type == WayClass::Data;
             m_dataWaySrc = WaySrc::WAY1;
             m_execWayValid = way1Type == WayClass::Exec;
             m_execWaySrc = WaySrc::WAY1;
+            m_stall = true && ifid_valid.uValue();
         } else if (rawHazard()) {
             // WAR hazard
             m_dataWayValid = way1Type == WayClass::Data;
             m_execWayValid = way1Type == WayClass::Exec;
             m_dataWaySrc = WaySrc::WAY1;
             m_execWaySrc = WaySrc::WAY1;
+            m_stall = true && ifid_valid.uValue();
         } else {
             // Can schedule both
             m_dataWayValid = true;
             m_execWayValid = true;
             m_dataWaySrc = way1Type == WayClass::Data ? WaySrc::WAY1 : WaySrc::WAY2;
             m_execWaySrc = way1Type == WayClass::Exec ? WaySrc::WAY1 : WaySrc::WAY2;
+            m_stall = false;
             Q_ASSERT(m_dataWaySrc != m_execWaySrc);
         }
 
@@ -124,9 +135,16 @@ public:
             return m_execWaySrc;
         };
 
+        stall_out << [=] {
+            computeCycle();
+            return m_stall;
+        };
+
         m_design = getDesign();
         Q_ASSERT(m_design != nullptr);
     }
+
+    INPUTPORT(ifid_valid, 1);
 
     INPUTPORT_ENUM(opcode_way1, RVInstr);
     INPUTPORT_ENUM(opcode_way2, RVInstr);
@@ -145,6 +163,10 @@ public:
     OUTPUTPORT(exec_way_valid, 1);
     OUTPUTPORT(data_way_valid, 1);
 
+    // Stall when only able to schedule 1 out of the 2 fetched instructions
+    INPUTPORT(stall_in, 1);
+    OUTPUTPORT(stall_out, 1);
+
 private:
     SimDesign* m_design;
 
@@ -155,6 +177,7 @@ private:
     bool m_execWayValid;
     WaySrc m_execWaySrc = WaySrc::WAY1;
     WaySrc m_dataWaySrc = WaySrc::WAY1;
+    bool m_stall = false;
 };
 
 }  // namespace core

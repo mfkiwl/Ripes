@@ -26,6 +26,7 @@
 #include "rv5s_dual_branch.h"
 #include "rv5s_dual_exmem.h"
 #include "rv5s_dual_idex.h"
+#include "rv5s_dual_idii.h"
 #include "rv5s_dual_ifid.h"
 #include "rv5s_dual_memwb.h"
 
@@ -269,16 +270,31 @@ public:
 
         // -----------------------------------------------------------------------
         // IF/ID
-        pc_4->out >> ifid_reg->pc4_in;
-        pc_reg->out >> ifid_reg->pc_in;
-        instr_mem->data_out >> ifid_reg->instr_in;
-        instr_mem->data_out2 >> ifid_reg->instr2_in;
-        hzunit->hazardFEEnable >> ifid_reg->enable;
-        efsc_or->out >> ifid_reg->clear;
-        1 >> ifid_reg->valid_in;  // Always valid unless register is cleared
+        pc_4->out >> idii_reg->pc4_in;
+        pc_reg->out >> idii_reg->pc_in;
+        instr_mem->data_out >> idii_reg->instr_in;
+        instr_mem->data_out2 >> idii_reg->instr2_in;
+        hzunit->hazardFEEnable >> idii_reg->enable;
+        efsc_or->out >> idii_reg->clear;
+        waycontrol->stall_out >> idii_reg->way_stall_in;
+        exec_way_pc->out >> ifid_reg->pc_in;
+        data_way_pc->out >> ifid_reg->pc_data_in;
+        exec_way_r1_reg_idx->out >> ifid_reg->rd_reg1_idx_in;
+        exec_way_r2_reg_idx->out >> ifid_reg->rd_reg2_idx_in;
+        exec_way_opcode->out >> ifid_reg->opcode_in;
+        data_way_r1_reg_idx->out >> ifid_reg->rd_reg1_idx_data_in;
+        data_way_r2_reg_idx->out >> ifid_reg->rd_reg2_idx_data_in;
+        exec_way_wr_reg_idx->out >> ifid_reg->wr_reg_idx_in;
+        decode_way1->wr_reg_idx >> ifid_reg->wr_reg_idx_data_in;
 
         // -----------------------------------------------------------------------
-        // ID/EX
+        // ID/II
+        ifid_reg->pc4_out >> idii_reg->pc4_in;  // actually pc8!
+        ifid_reg->valid_out >> idii_reg->valid_in;
+        1 >> idii_reg->valid_in;  // Always valid unless register is cleared
+
+        // -----------------------------------------------------------------------
+        // II/EX
         hzunit->hazardIDEXEnable >> idex_reg->enable;
         hzunit->hazardIDEXClear >> idex_reg->stalled_in;
         efschz_or->out >> idex_reg->clear;
@@ -296,18 +312,18 @@ public:
         imm_data->imm >> idex_reg->imm_data_in;
 
         // Control
-        exec_way_wr_reg_idx->out >> idex_reg->wr_reg_idx_in;
+        idii_reg->exec_way_wr_reg_idx->out >> ifid_reg->wr_reg_idx_in;
         0 >> idex_reg->reg_wr_src_ctrl_in;  // unused - we're using the specialized RegWrSrcDual
         control->reg_wr_src_ctrl >> idex_reg->reg_wr_src_ctrl_dual_in;
         control->reg_do_write_ctrl_exec >> idex_reg->reg_do_write_in;
-        exec_way_r1_reg_idx->out >> idex_reg->rd_reg1_idx_in;
-        exec_way_r2_reg_idx->out >> idex_reg->rd_reg2_idx_in;
-        exec_way_opcode->out >> idex_reg->opcode_in;
-        data_way_r1_reg_idx->out >> idex_reg->rd_reg1_idx_data_in;
-        data_way_r2_reg_idx->out >> idex_reg->rd_reg2_idx_data_in;
+        idii_reg->rd_reg1_idx_exec_out >> idex_reg->rd_reg1_idx_in;
+        idii_reg->rd_reg1_idx_exec_out >> idex_reg->rd_reg2_idx_in;
+        idii_reg->rd_reg1_idx_data_out >> idex_reg->rd_reg1_idx_data_in;
+        idii_reg->rd_reg1_idx_data_out >> idex_reg->rd_reg2_idx_data_in;
+        idii_reg->exec_way_opcode->out >> idex_reg->opcode_in;
 
-        waycontrol->exec_way_valid >> control->exec_valid;
-        waycontrol->data_way_valid >> control->data_valid;
+        idii_reg->exec_way_valid_out >> control->exec_valid;
+        idii_reg->data_way_valid_out >> control->data_valid;
 
         control->alu_op1_ctrl_exec >> idex_reg->alu_op1_ctrl_in;
         control->alu_op2_ctrl_exec >> idex_reg->alu_op2_ctrl_in;
@@ -323,14 +339,13 @@ public:
         control->do_branch >> idex_reg->do_br_in;
         control->do_jump >> idex_reg->do_jmp_in;
 
-        decode_way1->wr_reg_idx >> idex_reg->wr_reg_idx_data_in;
+        idii_reg->wr_reg_idx_data_out >> idex_reg->wr_reg_idx_data_in;
         control->reg_do_write_ctrl_data >> idex_reg->reg_do_write_data_in;
         control->mem_do_read_ctrl >> idex_reg->mem_do_read_in;
 
-        ifid_reg->valid_out >> idex_reg->valid_in;
+        idii_reg->valid_out >> idex_reg->valid_in;
         waycontrol->data_way_valid >> idex_reg->data_valid_in;
         waycontrol->exec_way_valid >> idex_reg->exec_valid_in;
-        waycontrol->stall_out >> idex_reg->way_stall_in;
 
         // -----------------------------------------------------------------------
         // EX/MEM
@@ -443,6 +458,7 @@ public:
 
     // Stage seperating registers
     SUBCOMPONENT(ifid_reg, IFID_DUAL);
+    SUBCOMPONENT(idii_reg, RV5S_IDII_DUAL);
     SUBCOMPONENT(idex_reg, RV5S_IDEX_DUAL);
     SUBCOMPONENT(exmem_reg, RV5S_EXMEM_DUAL);
     SUBCOMPONENT(memwb_reg, RV5S_MEMWB_DUAL);

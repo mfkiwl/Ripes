@@ -14,6 +14,9 @@ using namespace Ripes;
 class RV5S_IDII_DUAL : public Component {
 public:
     RV5S_IDII_DUAL(std::string name, SimComponent* parent) : Component(name, parent) {
+        CONNECT_REGISTERED_CLEN_INPUT(pc_data, clear, enable);
+        CONNECT_REGISTERED_CLEN_INPUT(pc_exec, clear, enable);
+
         CONNECT_REGISTERED_CLEN_INPUT(pc4, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(pc, clear, enable);
 
@@ -29,9 +32,19 @@ public:
         CONNECT_REGISTERED_CLEN_INPUT(wr_reg_idx_data, clear, enable);
 
         CONNECT_REGISTERED_CLEN_INPUT(way_stall, clear, enable);
-        CONNECT_REGISTERED_CLEN_INPUT(stalled, 0, 1);
         CONNECT_REGISTERED_CLEN_INPUT(data_valid, clear, enable);
+
+        CONNECT_REGISTERED_CLEN_INPUT(valid, clear, enable);
+
+        CONNECT_REGISTERED_CLEN_INPUT(instr_data, clear, enable);
+        CONNECT_REGISTERED_CLEN_INPUT(instr_exec, clear, enable);
     }
+
+    REGISTERED_CLEN_INPUT(instr_data, RV_REG_WIDTH);
+    REGISTERED_CLEN_INPUT(instr_exec, RV_REG_WIDTH);
+
+    REGISTERED_CLEN_INPUT(pc_data, RV_REG_WIDTH);
+    REGISTERED_CLEN_INPUT(pc_exec, RV_REG_WIDTH);
 
     REGISTERED_CLEN_INPUT(pc, RV_REG_WIDTH);
     REGISTERED_CLEN_INPUT(pc4, RV_REG_WIDTH);
@@ -48,10 +61,10 @@ public:
 
     REGISTERED_CLEN_INPUT(way_stall, 1);
 
-    REGISTERED_CLEN_INPUT(stalled, 1);
-
     REGISTERED_CLEN_INPUT(exec_valid, 1);
     REGISTERED_CLEN_INPUT(data_valid, 1);
+
+    REGISTERED_CLEN_INPUT(valid, 1);
 
     // Register bank controls
     INPUTPORT(enable, 1);

@@ -25,9 +25,9 @@
 // Stage separating registers
 #include "rv5s_dual_branch.h"
 #include "rv5s_dual_exmem.h"
-#include "rv5s_dual_idex.h"
 #include "rv5s_dual_idii.h"
 #include "rv5s_dual_ifid.h"
+#include "rv5s_dual_iiex.h"
 #include "rv5s_dual_memwb.h"
 
 // Forwarding & Hazard detection unit
@@ -89,17 +89,12 @@ public:
         ifid_reg->instr2_out >> decode_way2->instr;
 
         // -----------------------------------------------------------------------
-        // Control signals
-        exec_way_opcode->out >> control->opcode_exec;
-        data_way_opcode->out >> control->opcode_data;
-
-        // -----------------------------------------------------------------------
         // Immediate
-        exec_way_opcode->out >> imm_exec->opcode;
+        idii_reg->opcode_exec_out >> imm_exec->opcode;
         exec_way_instr->out >> imm_exec->instr;
 
-        data_way_opcode->out >> imm_data->opcode;
-        data_way_instr->out >> imm_data->instr;
+        idii_reg->opcode_data_out >> imm_data->opcode;
+        idii_reg->instr_data_out >> imm_data->instr;
 
         // -----------------------------------------------------------------------
         // Way control
@@ -112,7 +107,7 @@ public:
         decode_way2->wr_reg_idx >> waycontrol->wr_reg_idx_way2;
         decode_way2->r1_reg_idx >> waycontrol->r1_reg_idx_way2;
         decode_way2->r2_reg_idx >> waycontrol->r2_reg_idx_way2;
-        idex_reg->way_stall_out >> waycontrol->stall_in;
+        idii_reg->way_stall_out >> waycontrol->stall_in;
         ifid_reg->valid_out >> waycontrol->ifid_valid;
 
         // -----------------------------------------------------------------------
@@ -186,24 +181,24 @@ public:
 
         // -----------------------------------------------------------------------
         // Branch
-        idex_reg->br_op_out >> branch->comp_op;
+        iiex_reg->br_op_out >> branch->comp_op;
         exec_reg1_fw_src->out >> branch->op1;
         exec_reg2_fw_src->out >> branch->op2;
 
-        idex_reg->do_jmp_out >> branch->do_jump;
-        idex_reg->do_br_out >> branch->do_branch;
+        iiex_reg->do_jmp_out >> branch->do_jump;
+        iiex_reg->do_br_out >> branch->do_branch;
 
         // -----------------------------------------------------------------------
         // Execution way ALU
 
         // Forwarding multiplexers
-        idex_reg->r1_out >> exec_reg1_fw_src->get(ForwardingSrcDual::IdStage);
+        iiex_reg->r1_out >> exec_reg1_fw_src->get(ForwardingSrcDual::IdStage);
         exmem_reg->alures_out >> exec_reg1_fw_src->get(ForwardingSrcDual::MemStage);
         reg_wr_src->out >> exec_reg1_fw_src->get(ForwardingSrcDual::WbStageExec);
         memwb_reg->mem_read_out >> exec_reg1_fw_src->get(ForwardingSrcDual::WbStageMem);
         funit->alu_reg1_fw_ctrl_exec >> exec_reg1_fw_src->select;
 
-        idex_reg->r2_out >> exec_reg2_fw_src->get(ForwardingSrcDual::IdStage);
+        iiex_reg->r2_out >> exec_reg2_fw_src->get(ForwardingSrcDual::IdStage);
         exmem_reg->alures_out >> exec_reg2_fw_src->get(ForwardingSrcDual::MemStage);
         reg_wr_src->out >> exec_reg2_fw_src->get(ForwardingSrcDual::WbStageExec);
         memwb_reg->mem_read_out >> exec_reg2_fw_src->get(ForwardingSrcDual::WbStageMem);
@@ -211,29 +206,29 @@ public:
 
         // ALU operand multiplexers
         exec_reg1_fw_src->out >> alu_op1_exec_src->get(AluSrc1::REG1);
-        idex_reg->pc_out >> alu_op1_exec_src->get(AluSrc1::PC);
-        idex_reg->alu_op1_ctrl_out >> alu_op1_exec_src->select;
+        iiex_reg->pc_out >> alu_op1_exec_src->get(AluSrc1::PC);
+        iiex_reg->alu_op1_ctrl_out >> alu_op1_exec_src->select;
 
         exec_reg2_fw_src->out >> alu_op2_exec_src->get(AluSrc2::REG2);
-        idex_reg->imm_out >> alu_op2_exec_src->get(AluSrc2::IMM);
-        idex_reg->alu_op2_ctrl_out >> alu_op2_exec_src->select;
+        iiex_reg->imm_out >> alu_op2_exec_src->get(AluSrc2::IMM);
+        iiex_reg->alu_op2_ctrl_out >> alu_op2_exec_src->select;
 
         alu_op1_exec_src->out >> alu->op1;
         alu_op2_exec_src->out >> alu->op2;
 
-        idex_reg->alu_ctrl_out >> alu->ctrl;
+        iiex_reg->alu_ctrl_out >> alu->ctrl;
 
         // -----------------------------------------------------------------------
         // Data way ALU
 
         // Forwarding multiplexers
-        idex_reg->r1_data_out >> data_reg1_fw_src->get(ForwardingSrcDual::IdStage);
+        iiex_reg->r1_data_out >> data_reg1_fw_src->get(ForwardingSrcDual::IdStage);
         exmem_reg->alures_out >> data_reg1_fw_src->get(ForwardingSrcDual::MemStage);
         reg_wr_src->out >> data_reg1_fw_src->get(ForwardingSrcDual::WbStageExec);
         memwb_reg->mem_read_out >> data_reg1_fw_src->get(ForwardingSrcDual::WbStageMem);
         funit->alu_reg1_fw_ctrl_data >> data_reg1_fw_src->select;
 
-        idex_reg->r2_data_out >> data_reg2_fw_src->get(ForwardingSrcDual::IdStage);
+        iiex_reg->r2_data_out >> data_reg2_fw_src->get(ForwardingSrcDual::IdStage);
         exmem_reg->alures_out >> data_reg2_fw_src->get(ForwardingSrcDual::MemStage);
         reg_wr_src->out >> data_reg2_fw_src->get(ForwardingSrcDual::WbStageExec);
         memwb_reg->mem_read_out >> data_reg2_fw_src->get(ForwardingSrcDual::WbStageMem);
@@ -241,17 +236,17 @@ public:
 
         // ALU operand multiplexers
         data_reg1_fw_src->out >> alu_op1_data_src->get(AluSrc1::REG1);  // Todo: fix
-        idex_reg->pc_out >> alu_op1_data_src->get(AluSrc1::PC);
-        idex_reg->alu_op1_ctrl_data_out >> alu_op1_data_src->select;
+        iiex_reg->pc_out >> alu_op1_data_src->get(AluSrc1::PC);
+        iiex_reg->alu_op1_ctrl_data_out >> alu_op1_data_src->select;
 
         data_reg2_fw_src->out >> alu_op2_data_src->get(AluSrc2::REG2);  // Todo: fix
-        idex_reg->imm_data_out >> alu_op2_data_src->get(AluSrc2::IMM);
-        idex_reg->alu_op2_ctrl_data_out >> alu_op2_data_src->select;
+        iiex_reg->imm_data_out >> alu_op2_data_src->get(AluSrc2::IMM);
+        iiex_reg->alu_op2_ctrl_data_out >> alu_op2_data_src->select;
 
         // ALU inputs
         alu_op1_data_src->out >> alu_data->op1;
         alu_op2_data_src->out >> alu_data->op2;
-        idex_reg->alu_ctrl_data_out >> alu_data->ctrl;
+        iiex_reg->alu_ctrl_data_out >> alu_data->ctrl;
 
         // -----------------------------------------------------------------------
         // Data memory
@@ -264,119 +259,131 @@ public:
         // -----------------------------------------------------------------------
         // Ecall checker
 
-        idex_reg->opcode_out >> ecallChecker->opcode;
+        iiex_reg->opcode_out >> ecallChecker->opcode;
         ecallChecker->setSysCallSignal(&handleSysCall);
         hzunit->stallEcallHandling >> ecallChecker->stallEcallHandling;
 
         // -----------------------------------------------------------------------
         // IF/ID
-        pc_4->out >> idii_reg->pc4_in;
-        pc_reg->out >> idii_reg->pc_in;
-        instr_mem->data_out >> idii_reg->instr_in;
-        instr_mem->data_out2 >> idii_reg->instr2_in;
-        hzunit->hazardFEEnable >> idii_reg->enable;
-        efsc_or->out >> idii_reg->clear;
-        waycontrol->stall_out >> idii_reg->way_stall_in;
-        exec_way_pc->out >> ifid_reg->pc_in;
-        data_way_pc->out >> ifid_reg->pc_data_in;
-        exec_way_r1_reg_idx->out >> ifid_reg->rd_reg1_idx_in;
-        exec_way_r2_reg_idx->out >> ifid_reg->rd_reg2_idx_in;
-        exec_way_opcode->out >> ifid_reg->opcode_in;
-        data_way_r1_reg_idx->out >> ifid_reg->rd_reg1_idx_data_in;
-        data_way_r2_reg_idx->out >> ifid_reg->rd_reg2_idx_data_in;
-        exec_way_wr_reg_idx->out >> ifid_reg->wr_reg_idx_in;
-        decode_way1->wr_reg_idx >> ifid_reg->wr_reg_idx_data_in;
+        pc_4->out >> ifid_reg->pc4_in;
+        pc_reg->out >> ifid_reg->pc_in;
+        instr_mem->data_out >> ifid_reg->instr_in;
+        instr_mem->data_out2 >> ifid_reg->instr2_in;
+        hzunit->hazardFEEnable >> ifid_reg->enable;
+        efsc_or->out >> ifid_reg->clear;
+        1 >> ifid_reg->valid_in;  // Always valid unless register is cleared
 
         // -----------------------------------------------------------------------
         // ID/II
+        ifid_reg->pc_out >> idii_reg->pc_in;
         ifid_reg->pc4_out >> idii_reg->pc4_in;  // actually pc8!
         ifid_reg->valid_out >> idii_reg->valid_in;
-        1 >> idii_reg->valid_in;  // Always valid unless register is cleared
+        waycontrol->stall_out >> idii_reg->way_stall_in;
+        efsc_or->out >> idii_reg->clear;
+
+        exec_way_pc->out >> idii_reg->pc_exec_in;
+        exec_way_r1_reg_idx->out >> idii_reg->rd_reg1_idx_exec_in;
+        exec_way_r2_reg_idx->out >> idii_reg->rd_reg2_idx_exec_in;
+        exec_way_wr_reg_idx->out >> idii_reg->wr_reg_idx_exec_in;
+        exec_way_opcode->out >> idii_reg->opcode_exec_in;
+        exec_way_instr->out >> idii_reg->instr_exec_in;
+
+        data_way_pc->out >> idii_reg->pc_data_in;
+        data_way_r1_reg_idx->out >> idii_reg->rd_reg1_idx_data_in;
+        data_way_r1_reg_idx->out >> idii_reg->rd_reg2_idx_data_in;
+        data_way_wr_reg_idx->out >> idii_reg->wr_reg_idx_data_in;
+        data_way_opcode->out >> idii_reg->opcode_data_in;
+        waycontrol->data_way_valid >> idii_reg->data_valid_in;
+        waycontrol->exec_way_valid >> idii_reg->exec_valid_in;
+        data_way_instr->out >> idii_reg->instr_data_in;
+        hzunit->hazardFEEnable >> idii_reg->enable;
 
         // -----------------------------------------------------------------------
         // II/EX
-        hzunit->hazardIDEXEnable >> idex_reg->enable;
-        hzunit->hazardIDEXClear >> idex_reg->stalled_in;
-        efschz_or->out >> idex_reg->clear;
+        hzunit->hazardIDEXEnable >> iiex_reg->enable;
+        hzunit->hazardIDEXClear >> iiex_reg->stalled_in;
+        efschz_or->out >> iiex_reg->clear;
 
         // Data
-        ifid_reg->pc4_out >> idex_reg->pc4_in;  // actually pc8!
-        exec_way_pc->out >> idex_reg->pc_in;
-        data_way_pc->out >> idex_reg->pc_data_in;
-        registerFile->r1_1_out >> idex_reg->r1_in;
-        registerFile->r2_1_out >> idex_reg->r2_in;
-        registerFile->r1_2_out >> idex_reg->r1_data_in;
-        registerFile->r2_2_out >> idex_reg->r2_data_in;
+        ifid_reg->pc4_out >> iiex_reg->pc4_in;  // actually pc8!
+        exec_way_pc->out >> iiex_reg->pc_in;
+        data_way_pc->out >> iiex_reg->pc_data_in;
+        registerFile->r1_1_out >> iiex_reg->r1_in;
+        registerFile->r2_1_out >> iiex_reg->r2_in;
+        registerFile->r1_2_out >> iiex_reg->r1_data_in;
+        registerFile->r2_2_out >> iiex_reg->r2_data_in;
 
-        imm_exec->imm >> idex_reg->imm_in;
-        imm_data->imm >> idex_reg->imm_data_in;
+        imm_exec->imm >> iiex_reg->imm_in;
+        imm_data->imm >> iiex_reg->imm_data_in;
 
         // Control
-        idii_reg->exec_way_wr_reg_idx->out >> ifid_reg->wr_reg_idx_in;
-        0 >> idex_reg->reg_wr_src_ctrl_in;  // unused - we're using the specialized RegWrSrcDual
-        control->reg_wr_src_ctrl >> idex_reg->reg_wr_src_ctrl_dual_in;
-        control->reg_do_write_ctrl_exec >> idex_reg->reg_do_write_in;
-        idii_reg->rd_reg1_idx_exec_out >> idex_reg->rd_reg1_idx_in;
-        idii_reg->rd_reg1_idx_exec_out >> idex_reg->rd_reg2_idx_in;
-        idii_reg->rd_reg1_idx_data_out >> idex_reg->rd_reg1_idx_data_in;
-        idii_reg->rd_reg1_idx_data_out >> idex_reg->rd_reg2_idx_data_in;
-        idii_reg->exec_way_opcode->out >> idex_reg->opcode_in;
+        idii_reg->wr_reg_idx_exec_out >> iiex_reg->wr_reg_idx_in;
+        0 >> iiex_reg->reg_wr_src_ctrl_in;  // unused - we're using the specialized RegWrSrcDual
+        control->reg_wr_src_ctrl >> iiex_reg->reg_wr_src_ctrl_dual_in;
+        control->reg_do_write_ctrl_exec >> iiex_reg->reg_do_write_in;
+        idii_reg->rd_reg1_idx_exec_out >> iiex_reg->rd_reg1_idx_in;
+        idii_reg->rd_reg1_idx_exec_out >> iiex_reg->rd_reg2_idx_in;
+        idii_reg->rd_reg1_idx_data_out >> iiex_reg->rd_reg1_idx_data_in;
+        idii_reg->rd_reg1_idx_data_out >> iiex_reg->rd_reg2_idx_data_in;
+        idii_reg->opcode_exec_out >> iiex_reg->opcode_in;
 
-        idii_reg->exec_way_valid_out >> control->exec_valid;
-        idii_reg->data_way_valid_out >> control->data_valid;
+        idii_reg->exec_valid_out >> control->exec_valid;
+        idii_reg->data_valid_out >> control->data_valid;
+        idii_reg->opcode_data_out >> control->opcode_data;
+        idii_reg->opcode_exec_out >> control->opcode_exec;
 
-        control->alu_op1_ctrl_exec >> idex_reg->alu_op1_ctrl_in;
-        control->alu_op2_ctrl_exec >> idex_reg->alu_op2_ctrl_in;
-        control->alu_ctrl_exec >> idex_reg->alu_ctrl_in;
+        control->alu_op1_ctrl_exec >> iiex_reg->alu_op1_ctrl_in;
+        control->alu_op2_ctrl_exec >> iiex_reg->alu_op2_ctrl_in;
+        control->alu_ctrl_exec >> iiex_reg->alu_ctrl_in;
 
-        control->alu_op1_ctrl_data >> idex_reg->alu_op1_ctrl_data_in;
-        control->alu_op2_ctrl_data >> idex_reg->alu_op2_ctrl_data_in;
-        control->alu_ctrl_data >> idex_reg->alu_ctrl_data_in;
+        control->alu_op1_ctrl_data >> iiex_reg->alu_op1_ctrl_data_in;
+        control->alu_op2_ctrl_data >> iiex_reg->alu_op2_ctrl_data_in;
+        control->alu_ctrl_data >> iiex_reg->alu_ctrl_data_in;
 
-        control->mem_do_write_ctrl >> idex_reg->mem_do_write_in;
-        control->mem_ctrl >> idex_reg->mem_op_in;
-        control->comp_ctrl >> idex_reg->br_op_in;
-        control->do_branch >> idex_reg->do_br_in;
-        control->do_jump >> idex_reg->do_jmp_in;
+        control->mem_do_write_ctrl >> iiex_reg->mem_do_write_in;
+        control->mem_ctrl >> iiex_reg->mem_op_in;
+        control->comp_ctrl >> iiex_reg->br_op_in;
+        control->do_branch >> iiex_reg->do_br_in;
+        control->do_jump >> iiex_reg->do_jmp_in;
 
-        idii_reg->wr_reg_idx_data_out >> idex_reg->wr_reg_idx_data_in;
-        control->reg_do_write_ctrl_data >> idex_reg->reg_do_write_data_in;
-        control->mem_do_read_ctrl >> idex_reg->mem_do_read_in;
+        idii_reg->wr_reg_idx_data_out >> iiex_reg->wr_reg_idx_data_in;
+        control->reg_do_write_ctrl_data >> iiex_reg->reg_do_write_data_in;
+        control->mem_do_read_ctrl >> iiex_reg->mem_do_read_in;
 
-        idii_reg->valid_out >> idex_reg->valid_in;
-        waycontrol->data_way_valid >> idex_reg->data_valid_in;
-        waycontrol->exec_way_valid >> idex_reg->exec_valid_in;
+        idii_reg->valid_out >> iiex_reg->valid_in;
+        idii_reg->data_valid_out >> iiex_reg->data_valid_in;
+        idii_reg->data_valid_out >> iiex_reg->exec_valid_in;
 
         // -----------------------------------------------------------------------
         // EX/MEM
         1 >> exmem_reg->enable;
         hzunit->hazardEXMEMClear >> exmem_reg->clear;
         hzunit->hazardEXMEMClear >> *mem_stalled_or->in[0];
-        idex_reg->stalled_out >> *mem_stalled_or->in[1];
+        iiex_reg->stalled_out >> *mem_stalled_or->in[1];
         mem_stalled_or->out >> exmem_reg->stalled_in;
 
         // Data
-        idex_reg->pc_out >> exmem_reg->pc_in;        // @todo: Fix this - needs multiplexer aswell
-        idex_reg->pc4_out >> exmem_reg->pc_data_in;  //@todo: Fix this - needs multiplexer aswell
-        idex_reg->pc4_out >> exmem_reg->pc4_in;
+        iiex_reg->pc_out >> exmem_reg->pc_in;        // @todo: Fix this - needs multiplexer aswell
+        iiex_reg->pc4_out >> exmem_reg->pc_data_in;  //@todo: Fix this - needs multiplexer aswell
+        iiex_reg->pc4_out >> exmem_reg->pc4_in;
         data_reg2_fw_src->out >> exmem_reg->r2_in;
         alu->res >> exmem_reg->alures_in;
         alu_data->res >> exmem_reg->alures_data_in;
 
         // Control
         0 >> exmem_reg->reg_wr_src_ctrl_in;  // unused - we're using the specialized RegWrSrcDual
-        idex_reg->reg_wr_src_ctrl_dual_out >> exmem_reg->reg_wr_src_ctrl_dual_in;
-        idex_reg->wr_reg_idx_out >> exmem_reg->wr_reg_idx_in;
-        idex_reg->reg_do_write_out >> exmem_reg->reg_do_write_in;
-        idex_reg->mem_do_write_out >> exmem_reg->mem_do_write_in;
-        idex_reg->mem_do_read_out >> exmem_reg->mem_do_read_in;
-        idex_reg->mem_op_out >> exmem_reg->mem_op_in;
-        idex_reg->reg_do_write_data_out >> exmem_reg->reg_do_write_data_in;
-        idex_reg->wr_reg_idx_data_out >> exmem_reg->wr_reg_idx_data_in;
+        iiex_reg->reg_wr_src_ctrl_dual_out >> exmem_reg->reg_wr_src_ctrl_dual_in;
+        iiex_reg->wr_reg_idx_out >> exmem_reg->wr_reg_idx_in;
+        iiex_reg->reg_do_write_out >> exmem_reg->reg_do_write_in;
+        iiex_reg->mem_do_write_out >> exmem_reg->mem_do_write_in;
+        iiex_reg->mem_do_read_out >> exmem_reg->mem_do_read_in;
+        iiex_reg->mem_op_out >> exmem_reg->mem_op_in;
+        iiex_reg->reg_do_write_data_out >> exmem_reg->reg_do_write_data_in;
+        iiex_reg->wr_reg_idx_data_out >> exmem_reg->wr_reg_idx_data_in;
 
-        idex_reg->valid_out >> exmem_reg->valid_in;
-        idex_reg->data_valid_out >> exmem_reg->data_valid_in;
-        idex_reg->exec_valid_out >> exmem_reg->exec_valid_in;
+        iiex_reg->valid_out >> exmem_reg->valid_in;
+        iiex_reg->data_valid_out >> exmem_reg->data_valid_in;
+        iiex_reg->exec_valid_out >> exmem_reg->exec_valid_in;
 
         // -----------------------------------------------------------------------
         // MEM/WB
@@ -407,10 +414,10 @@ public:
 
         // -----------------------------------------------------------------------
         // Forwarding unit
-        idex_reg->rd_reg1_idx_out >> funit->id_reg1_idx_exec;
-        idex_reg->rd_reg2_idx_out >> funit->id_reg2_idx_exec;
-        idex_reg->rd_reg1_idx_data_out >> funit->id_reg1_idx_data;
-        idex_reg->rd_reg2_idx_data_out >> funit->id_reg2_idx_data;
+        iiex_reg->rd_reg1_idx_out >> funit->id_reg1_idx_exec;
+        iiex_reg->rd_reg2_idx_out >> funit->id_reg2_idx_exec;
+        iiex_reg->rd_reg1_idx_data_out >> funit->id_reg1_idx_data;
+        iiex_reg->rd_reg2_idx_data_out >> funit->id_reg2_idx_data;
 
         exmem_reg->wr_reg_idx_out >> funit->mem_reg_wr_idx_exec;
         exmem_reg->reg_do_write_out >> funit->mem_reg_wr_en_exec;
@@ -427,8 +434,8 @@ public:
         data_way_r1_reg_idx->out >> hzunit->id_reg1_idx_data;
         data_way_r2_reg_idx->out >> hzunit->id_reg2_idx_data;
 
-        idex_reg->mem_do_read_out >> hzunit->ex_do_mem_read_en;
-        idex_reg->wr_reg_idx_data_out >> hzunit->ex_reg_wr_idx_data;
+        iiex_reg->mem_do_read_out >> hzunit->ex_do_mem_read_en;
+        iiex_reg->wr_reg_idx_data_out >> hzunit->ex_reg_wr_idx_data;
 
         exmem_reg->reg_do_write_out >> hzunit->mem_do_reg_write_exec;
         exmem_reg->reg_do_write_data_out >> hzunit->mem_do_reg_write_data;
@@ -436,7 +443,7 @@ public:
         memwb_reg->reg_do_write_out >> hzunit->wb_do_reg_write_exec;
         memwb_reg->reg_do_write_data_out >> hzunit->wb_do_reg_write_data;
 
-        idex_reg->opcode_out >> hzunit->opcode;
+        iiex_reg->opcode_out >> hzunit->opcode;
     }
 
     // Design subcomponents
@@ -459,7 +466,7 @@ public:
     // Stage seperating registers
     SUBCOMPONENT(ifid_reg, IFID_DUAL);
     SUBCOMPONENT(idii_reg, RV5S_IDII_DUAL);
-    SUBCOMPONENT(idex_reg, RV5S_IDEX_DUAL);
+    SUBCOMPONENT(iiex_reg, RV5S_IIEX_DUAL);
     SUBCOMPONENT(exmem_reg, RV5S_EXMEM_DUAL);
     SUBCOMPONENT(memwb_reg, RV5S_MEMWB_DUAL);
 
@@ -527,8 +534,8 @@ public:
             case IF_2: return pc_reg->out.uValue() + 4;
             case ID_1: return ifid_reg->pc_out.uValue();
             case ID_2: return ifid_reg->pc4_out.uValue();
-            case EX_EXEC: return idex_reg->pc_out.uValue();
-            case EX_DATA: return idex_reg->pc4_out.uValue();
+            case EX_EXEC: return iiex_reg->pc_out.uValue();
+            case EX_DATA: return iiex_reg->pc4_out.uValue();
             case MEM_EXEC: return exmem_reg->pc_out.uValue();
             case MEM_DATA: return exmem_reg->pc_data_out.uValue();
             case WB_EXEC: return memwb_reg->pc_out.uValue();
@@ -561,7 +568,7 @@ public:
         // Has the stage been cleared?
         switch(stage){
         case ID_1: case ID_2: stageValid &= ifid_reg->valid_out.uValue(); break;
-        case EX_EXEC: case EX_DATA: stageValid &= idex_reg->valid_out.uValue(); break;
+        case EX_EXEC: case EX_DATA: stageValid &= iiex_reg->valid_out.uValue(); break;
         case MEM_EXEC: case MEM_DATA: stageValid &= exmem_reg->valid_out.uValue(); break;
         case WB_EXEC: case WB_DATA: stageValid &= memwb_reg->valid_out.uValue(); break;
         default: case IF_1: case IF_2: break;
@@ -572,8 +579,8 @@ public:
         switch(stage){
         case ID_1: stageValid &= isExecutableAddress(ifid_reg->pc_out.uValue()); break;
         case ID_2: stageValid &= isExecutableAddress(ifid_reg->pc4_out.uValue()); break;
-        case EX_EXEC: stageValid &= isExecutableAddress(idex_reg->pc_out.uValue()); break;
-        case EX_DATA: stageValid &= isExecutableAddress(idex_reg->pc4_out.uValue()); break;
+        case EX_EXEC: stageValid &= isExecutableAddress(iiex_reg->pc_out.uValue()); break;
+        case EX_DATA: stageValid &= isExecutableAddress(iiex_reg->pc4_out.uValue()); break;
         case MEM_EXEC: stageValid &= isExecutableAddress(exmem_reg->pc_out.uValue()); break;
         case MEM_DATA: stageValid &= isExecutableAddress(exmem_reg->pc_data_out.uValue()); break;
         case WB_EXEC: stageValid &= isExecutableAddress(memwb_reg->pc_out.uValue()); break;
@@ -601,9 +608,9 @@ public:
                 break;
             case EX_EXEC:
             case EX_DATA: {
-                if (idex_reg->stalled_out.uValue() == 1) {
+                if (iiex_reg->stalled_out.uValue() == 1) {
                     state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > (EX_EXEC / 2) && idex_reg->valid_out.uValue() == 0) {
+                } else if (m_cycleCount > (EX_EXEC / 2) && iiex_reg->valid_out.uValue() == 0) {
                     state = StageInfo::State::Flushed;
                 }
                 break;

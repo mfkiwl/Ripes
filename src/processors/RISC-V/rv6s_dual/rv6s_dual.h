@@ -17,31 +17,31 @@
 #include "../rv_memory.h"
 
 // Specialized dual-issue components
-#include "rv5s_dual_control.h"
-#include "rv5s_dual_instr_mem.h"
-#include "rv5s_dual_registerfile.h"
-#include "rv5s_dual_waycontrol.h"
+#include "rv6s_dual_control.h"
+#include "rv6s_dual_instr_mem.h"
+#include "rv6s_dual_registerfile.h"
+#include "rv6s_dual_waycontrol.h"
 
 // Stage separating registers
-#include "rv5s_dual_branch.h"
-#include "rv5s_dual_exmem.h"
-#include "rv5s_dual_idii.h"
-#include "rv5s_dual_ifid.h"
-#include "rv5s_dual_iiex.h"
-#include "rv5s_dual_memwb.h"
+#include "rv6s_dual_branch.h"
+#include "rv6s_dual_exmem.h"
+#include "rv6s_dual_idii.h"
+#include "rv6s_dual_ifid.h"
+#include "rv6s_dual_iiex.h"
+#include "rv6s_dual_memwb.h"
 
 // Forwarding & Hazard detection unit
-#include "rv5s_dual_forwardingunit.h"
-#include "rv5s_dual_hazardunit.h"
+#include "rv6s_dual_forwardingunit.h"
+#include "rv6s_dual_hazardunit.h"
 
 namespace vsrtl {
 namespace core {
 using namespace Ripes;
 
-class RV5S_DUAL : public RipesProcessor {
+class RV6S_DUAL : public RipesProcessor {
 public:
     enum Stage { IF_1, IF_2, ID_1, ID_2, EX_EXEC, EX_DATA, MEM_EXEC, MEM_DATA, WB_EXEC, WB_DATA, STAGECOUNT };
-    RV5S_DUAL(const QStringList& extensions) : RipesProcessor("5-Stage Static Dual-issue RISC-V Processor") {
+    RV6S_DUAL(const QStringList& extensions) : RipesProcessor("6-Stage Dual-issue RISC-V Processor") {
         m_enabledISA = std::make_shared<ISAInfo<ISA::RV32I>>(extensions);
         decode_way2->setISA(m_enabledISA);
         decode_way1->setISA(m_enabledISA);
@@ -91,7 +91,7 @@ public:
         // -----------------------------------------------------------------------
         // Immediate
         idii_reg->opcode_exec_out >> imm_exec->opcode;
-        exec_way_instr->out >> imm_exec->instr;
+        idii_reg->instr_exec_out >> imm_exec->instr;
 
         idii_reg->opcode_data_out >> imm_data->opcode;
         idii_reg->instr_data_out >> imm_data->instr;
@@ -164,15 +164,15 @@ public:
         // Registers
 
         // Exec way
-        exec_way_r1_reg_idx->out >> registerFile->r1_1_addr;
-        exec_way_r2_reg_idx->out >> registerFile->r2_1_addr;
+        idii_reg->rd_reg1_idx_exec_out >> registerFile->r1_1_addr;
+        idii_reg->rd_reg1_idx_exec_out >> registerFile->r2_1_addr;
         reg_wr_src->out >> registerFile->data_1_in;
         memwb_reg->wr_reg_idx_out >> registerFile->wr_1_addr;
         memwb_reg->reg_do_write_out >> registerFile->wr_1_en;
 
         // Data way
-        data_way_r1_reg_idx->out >> registerFile->r1_2_addr;
-        data_way_r2_reg_idx->out >> registerFile->r2_2_addr;
+        idii_reg->rd_reg1_idx_data_out >> registerFile->r1_2_addr;
+        idii_reg->rd_reg2_idx_data_out >> registerFile->r2_2_addr;
         memwb_reg->mem_read_out >> registerFile->data_2_in;
         memwb_reg->wr_reg_idx_data_out >> registerFile->wr_2_addr;
         memwb_reg->reg_do_write_data_out >> registerFile->wr_2_en;
@@ -290,7 +290,7 @@ public:
 
         data_way_pc->out >> idii_reg->pc_data_in;
         data_way_r1_reg_idx->out >> idii_reg->rd_reg1_idx_data_in;
-        data_way_r1_reg_idx->out >> idii_reg->rd_reg2_idx_data_in;
+        data_way_r2_reg_idx->out >> idii_reg->rd_reg2_idx_data_in;
         data_way_wr_reg_idx->out >> idii_reg->wr_reg_idx_data_in;
         data_way_opcode->out >> idii_reg->opcode_data_in;
         waycontrol->data_way_valid >> idii_reg->data_valid_in;
@@ -305,9 +305,9 @@ public:
         efschz_or->out >> iiex_reg->clear;
 
         // Data
-        ifid_reg->pc4_out >> iiex_reg->pc4_in;  // actually pc8!
-        exec_way_pc->out >> iiex_reg->pc_in;
-        data_way_pc->out >> iiex_reg->pc_data_in;
+        idii_reg->pc4_out >> iiex_reg->pc4_in;  // actually pc8!
+        idii_reg->pc_exec_out >> iiex_reg->pc_in;
+        idii_reg->pc_data_out >> iiex_reg->pc_data_in;
         registerFile->r1_1_out >> iiex_reg->r1_in;
         registerFile->r2_1_out >> iiex_reg->r2_in;
         registerFile->r1_2_out >> iiex_reg->r1_data_in;
@@ -429,10 +429,10 @@ public:
 
         // -----------------------------------------------------------------------
         // Hazard detection unit
-        exec_way_r1_reg_idx->out >> hzunit->id_reg1_idx_exec;
-        exec_way_r2_reg_idx->out >> hzunit->id_reg2_idx_exec;
-        data_way_r1_reg_idx->out >> hzunit->id_reg1_idx_data;
-        data_way_r2_reg_idx->out >> hzunit->id_reg2_idx_data;
+        idii_reg->rd_reg1_idx_exec_out >> hzunit->id_reg1_idx_exec;
+        idii_reg->rd_reg2_idx_exec_out >> hzunit->id_reg2_idx_exec;
+        idii_reg->rd_reg1_idx_data_out >> hzunit->id_reg1_idx_data;
+        idii_reg->rd_reg2_idx_data_out >> hzunit->id_reg2_idx_data;
 
         iiex_reg->mem_do_read_out >> hzunit->ex_do_mem_read_en;
         iiex_reg->wr_reg_idx_data_out >> hzunit->ex_reg_wr_idx_data;

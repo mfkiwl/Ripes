@@ -8,16 +8,16 @@
 #include "processors/ripesprocessor.h"
 
 #include "processors/RISC-V/rv5s/rv5s.h"
-#include "processors/RISC-V/rv5s_dual/rv5s_dual.h"
 #include "processors/RISC-V/rv5s_no_fw_hz/rv5s_no_fw_hz.h"
 #include "processors/RISC-V/rv5s_no_hz/rv5s_no_hz.h"
+#include "processors/RISC-V/rv6s_dual/rv6s_dual.h"
 #include "processors/RISC-V/rvss/rvss.h"
 
 namespace Ripes {
 Q_NAMESPACE
 
 // =============================== Processors =================================
-enum ProcessorID { RVSS, RV5S, RV5S_DUAL, RV5S_NO_HZ, RV5S_NO_FW_HZ, NUM_PROCESSORS };
+enum ProcessorID { RVSS, RV5S, RV6S_DUAL, RV5S_NO_HZ, RV5S_NO_FW_HZ, NUM_PROCESSORS };
 Q_ENUM_NS(Ripes::ProcessorID);  // Register with the metaobject system
 // ============================================================================
 
@@ -57,8 +57,8 @@ public:
                 return std::make_unique<vsrtl::core::RV5S_NO_FW_HZ>(extensions);
             case ProcessorID::RV5S:
                 return std::make_unique<vsrtl::core::RV5S>(extensions);
-            case ProcessorID::RV5S_DUAL:
-                return std::make_unique<vsrtl::core::RV5S_DUAL>(extensions);
+            case ProcessorID::RV6S_DUAL:
+                return std::make_unique<vsrtl::core::RV6S_DUAL>(extensions);
             case ProcessorID::RVSS:
                 return std::make_unique<vsrtl::core::RVSS>(extensions);
             case ProcessorID::RV5S_NO_HZ:
@@ -96,14 +96,14 @@ private:
         m_descriptions[desc.id] = desc;
 
         desc = ProcessorDescription();
-        desc.id = ProcessorID::RV5S_DUAL;
-        desc.isa = vsrtl::core::RV5S_DUAL::ISA();
-        desc.name = "5-Stage Static Dual-issue";
+        desc.id = ProcessorID::RV6S_DUAL;
+        desc.isa = vsrtl::core::RV6S_DUAL::ISA();
+        desc.name = "6-Stage Dual-issue";
         desc.description =
-            "A 5-Stage static dual-issue in-order processor static. The processor may issue an ALU/branch instruction "
+            "A 6-Stage static dual-issue in-order processor static. The processor may issue an ALU/branch instruction "
             "in parallel with a load/store instruction.";
         desc.layouts = {{"Extended",
-                         ":/layouts/RISC-V/rv5s_dual/rv5s_dual_extended_layout.json",
+                         ":/layouts/RISC-V/rv6s_dual/rv6s_dual_extended_layout.json",
                          {0.08, 0.28, 0.54, 0.78, 0.9, 0.08, 0.28, 0.54, 0.78, 0.9}}};
         desc.defaultRegisterVals = {{2, 0x7ffffff0}, {3, 0x10000000}};
         m_descriptions[desc.id] = desc;

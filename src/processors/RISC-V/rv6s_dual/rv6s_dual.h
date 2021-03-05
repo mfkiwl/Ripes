@@ -322,9 +322,9 @@ public:
         control->reg_wr_src_ctrl >> iiex_reg->reg_wr_src_ctrl_dual_in;
         control->reg_do_write_ctrl_exec >> iiex_reg->reg_do_write_in;
         idii_reg->rd_reg1_idx_exec_out >> iiex_reg->rd_reg1_idx_in;
-        idii_reg->rd_reg1_idx_exec_out >> iiex_reg->rd_reg2_idx_in;
+        idii_reg->rd_reg2_idx_exec_out >> iiex_reg->rd_reg2_idx_in;
         idii_reg->rd_reg1_idx_data_out >> iiex_reg->rd_reg1_idx_data_in;
-        idii_reg->rd_reg1_idx_data_out >> iiex_reg->rd_reg2_idx_data_in;
+        idii_reg->rd_reg2_idx_data_out >> iiex_reg->rd_reg2_idx_data_in;
         idii_reg->opcode_exec_out >> iiex_reg->opcode_in;
 
         idii_reg->exec_valid_out >> control->exec_valid;
@@ -352,7 +352,7 @@ public:
 
         idii_reg->valid_out >> iiex_reg->valid_in;
         idii_reg->data_valid_out >> iiex_reg->data_valid_in;
-        idii_reg->data_valid_out >> iiex_reg->exec_valid_in;
+        idii_reg->exec_valid_out >> iiex_reg->exec_valid_in;
 
         // -----------------------------------------------------------------------
         // EX/MEM

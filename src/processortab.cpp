@@ -2,6 +2,7 @@
 #include "ui_processortab.h"
 
 #include <QDir>
+#include <QFontMetrics>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollBar>
@@ -159,7 +160,9 @@ void ProcessorTab::loadLayout(const Layout& layout) {
     const auto& parent = m_stageInstructionLabels.at(0)->parentItem();
     for (unsigned i = 0; i < m_stageInstructionLabels.size(); i++) {
         auto& label = m_stageInstructionLabels.at(i);
-        label->setPos(parent->boundingRect().width() * layout.stageLabelPositions.at(i), 0);
+        QFontMetrics metrics(label->font());
+        label->setPos(parent->boundingRect().width() * layout.stageLabelPositions.at(i).x(),
+                      metrics.height() * layout.stageLabelPositions.at(i).y());
     }
 }
 

@@ -412,7 +412,14 @@ void ProcessorTab::updateInstructionLabels() {
         auto* instrLabel = m_stageInstructionLabels.at(i);
         QString instrString;
         if (stageInfo.state != StageInfo::State::None) {
-            instrString = stageInfo.state == StageInfo::State::Flushed ? "nop (flush)" : "nop (stall)";
+            /* clang-format off */
+            switch (stageInfo.state) {
+                case StageInfo::State::Flushed: instrString = "nop (flush)"; break;
+                case StageInfo::State::Stalled: instrString = "nop (stall)"; break;
+                case StageInfo::State::WayHazard: if(stageInfo.stage_valid) {instrString = "nop (way hazard)";} break;
+                case StageInfo::State::None: Q_UNREACHABLE();
+            }
+            /* clang-format on */
             instrLabel->setDefaultTextColor(Qt::red);
         } else if (stageInfo.stage_valid) {
             instrString = ProcessorHandler::get()->disassembleInstr(stageInfo.pc);

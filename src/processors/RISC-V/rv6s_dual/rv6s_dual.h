@@ -40,7 +40,21 @@ using namespace Ripes;
 
 class RV6S_DUAL : public RipesProcessor {
 public:
-    enum Stage { IF_1, IF_2, ID_1, ID_2, EX_EXEC, EX_DATA, MEM_EXEC, MEM_DATA, WB_EXEC, WB_DATA, STAGECOUNT };
+    enum Stage {
+        IF_1,
+        IF_2,
+        ID_1,
+        ID_2,
+        II_EXEC,
+        II_DATA,
+        EX_EXEC,
+        EX_DATA,
+        MEM_EXEC,
+        MEM_DATA,
+        WB_EXEC,
+        WB_DATA,
+        STAGECOUNT
+    };
     RV6S_DUAL(const QStringList& extensions) : RipesProcessor("6-Stage Dual-issue RISC-V Processor") {
         m_enabledISA = std::make_shared<ISAInfo<ISA::RV32I>>(extensions);
         decode_way2->setISA(m_enabledISA);
@@ -165,7 +179,7 @@ public:
 
         // Exec way
         idii_reg->rd_reg1_idx_exec_out >> registerFile->r1_1_addr;
-        idii_reg->rd_reg1_idx_exec_out >> registerFile->r2_1_addr;
+        idii_reg->rd_reg2_idx_exec_out >> registerFile->r2_1_addr;
         reg_wr_src->out >> registerFile->data_1_in;
         memwb_reg->wr_reg_idx_out >> registerFile->wr_1_addr;
         memwb_reg->reg_do_write_out >> registerFile->wr_1_en;
@@ -269,7 +283,7 @@ public:
         pc_reg->out >> ifid_reg->pc_in;
         instr_mem->data_out >> ifid_reg->instr_in;
         instr_mem->data_out2 >> ifid_reg->instr2_in;
-        hzunit->hazardFEEnable >> ifid_reg->enable;
+        pc_enabled->out >> ifid_reg->enable;
         efsc_or->out >> ifid_reg->clear;
         1 >> ifid_reg->valid_in;  // Always valid unless register is cleared
 
@@ -534,8 +548,10 @@ public:
             case IF_2: return pc_reg->out.uValue() + 4;
             case ID_1: return ifid_reg->pc_out.uValue();
             case ID_2: return ifid_reg->pc4_out.uValue();
+            case II_EXEC: return idii_reg->pc_exec_out.uValue();
+            case II_DATA: return idii_reg->pc_data_out.uValue();
             case EX_EXEC: return iiex_reg->pc_out.uValue();
-            case EX_DATA: return iiex_reg->pc4_out.uValue();
+            case EX_DATA: return iiex_reg->pc_data_out.uValue();
             case MEM_EXEC: return exmem_reg->pc_out.uValue();
             case MEM_DATA: return exmem_reg->pc_data_out.uValue();
             case WB_EXEC: return memwb_reg->pc_out.uValue();
@@ -551,6 +567,7 @@ public:
         switch (idx) {
             case IF_1: case IF_2: return "IF";
             case ID_1: case ID_2: return "ID";
+            case II_EXEC: case II_DATA: return "II";
             case EX_EXEC: case EX_DATA: return "EX";
             case MEM_EXEC: case MEM_DATA: return "MEM";
             case WB_EXEC: case WB_DATA: return "WB";
@@ -568,6 +585,7 @@ public:
         // Has the stage been cleared?
         switch(stage){
         case ID_1: case ID_2: stageValid &= ifid_reg->valid_out.uValue(); break;
+        case II_EXEC: case II_DATA: stageValid &= idii_reg->valid_out.uValue(); break;
         case EX_EXEC: case EX_DATA: stageValid &= iiex_reg->valid_out.uValue(); break;
         case MEM_EXEC: case MEM_DATA: stageValid &= exmem_reg->valid_out.uValue(); break;
         case WB_EXEC: case WB_DATA: stageValid &= memwb_reg->valid_out.uValue(); break;
@@ -579,12 +597,14 @@ public:
         switch(stage){
         case ID_1: stageValid &= isExecutableAddress(ifid_reg->pc_out.uValue()); break;
         case ID_2: stageValid &= isExecutableAddress(ifid_reg->pc4_out.uValue()); break;
-        case EX_EXEC: stageValid &= isExecutableAddress(iiex_reg->pc_out.uValue()); break;
-        case EX_DATA: stageValid &= isExecutableAddress(iiex_reg->pc4_out.uValue()); break;
-        case MEM_EXEC: stageValid &= isExecutableAddress(exmem_reg->pc_out.uValue()); break;
-        case MEM_DATA: stageValid &= isExecutableAddress(exmem_reg->pc_data_out.uValue()); break;
-        case WB_EXEC: stageValid &= isExecutableAddress(memwb_reg->pc_out.uValue()); break;
-        case WB_DATA: stageValid &= isExecutableAddress(memwb_reg->pc_data_out.uValue()); break;
+        case II_EXEC: stageValid &= isExecutableAddress(idii_reg->pc_out.uValue()); break;
+        case II_DATA: stageValid &= isExecutableAddress(idii_reg->pc_data_out.uValue()); break;
+        case EX_EXEC: stageValid &= isExecutableAddress(iiex_reg->pc_out.uValue()) ; break;
+        case EX_DATA: stageValid &= isExecutableAddress(iiex_reg->pc_data_out.uValue()) ; break;
+        case MEM_EXEC: stageValid &= isExecutableAddress(exmem_reg->pc_out.uValue()) ; break;
+        case MEM_DATA: stageValid &= isExecutableAddress(exmem_reg->pc_data_out.uValue()) ; break;
+        case WB_EXEC: stageValid &= isExecutableAddress(memwb_reg->pc_out.uValue()) ; break;
+        case WB_DATA: stageValid &= isExecutableAddress(memwb_reg->pc_data_out.uValue()) ; break;
         default: case IF_1: case IF_2: stageValid &= isExecutableAddress(pc_reg->out.uValue()); break;
         }
 
@@ -602,34 +622,70 @@ public:
                 break;
             case ID_1:
             case ID_2:
-                if (m_cycleCount > (ID_1 / 2) && ifid_reg->valid_out.uValue() == 0) {
-                    state = StageInfo::State::Flushed;
+                if (m_cycleCount > (ID_1 / 2)) {
+                    if (ifid_reg->valid_out.uValue() == 0) {
+                        state = StageInfo::State::Flushed;
+                    } else if (stage == ID_2 && idii_reg->way_stall_out.uValue()) {
+                        state = StageInfo::State::WayHazard;
+                    }
+                }
+                break;
+            case II_EXEC:
+            case II_DATA:
+                if (m_cycleCount > (II_EXEC / 2)) {
+                    if (idii_reg->valid_out.uValue() == 0) {
+                        state = StageInfo::State::Flushed;
+                    } else {
+                        if (stage == II_EXEC) {
+                            state = idii_reg->exec_valid_out.uValue() ? state : StageInfo::State::WayHazard;
+                        } else {
+                            state = idii_reg->data_valid_out.uValue() ? state : StageInfo::State::WayHazard;
+                        }
+                    }
                 }
                 break;
             case EX_EXEC:
             case EX_DATA: {
-                if (iiex_reg->stalled_out.uValue() == 1) {
-                    state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > (EX_EXEC / 2) && iiex_reg->valid_out.uValue() == 0) {
-                    state = StageInfo::State::Flushed;
+                if (m_cycleCount > (EX_EXEC / 2)) {
+                    if (iiex_reg->valid_out.uValue() == 0) {
+                        state = StageInfo::State::Flushed;
+                    } else {
+                        if (stage == EX_EXEC) {
+                            state = iiex_reg->exec_valid_out.uValue() ? state : StageInfo::State::WayHazard;
+                        } else {
+                            state = iiex_reg->data_valid_out.uValue() ? state : StageInfo::State::WayHazard;
+                        }
+                    }
                 }
                 break;
             }
             case MEM_DATA:
             case MEM_EXEC: {
-                if (exmem_reg->stalled_out.uValue() == 1) {
-                    state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > (MEM_EXEC / 2) && exmem_reg->valid_out.uValue() == 0) {
-                    state = StageInfo::State::Flushed;
+                if (m_cycleCount > (MEM_EXEC / 2)) {
+                    if (exmem_reg->valid_out.uValue() == 0) {
+                        state = StageInfo::State::Flushed;
+                    } else {
+                        if (stage == MEM_EXEC) {
+                            state = exmem_reg->exec_valid_out.uValue() ? state : StageInfo::State::WayHazard;
+                        } else {
+                            state = exmem_reg->data_valid_out.uValue() ? state : StageInfo::State::WayHazard;
+                        }
+                    }
                 }
                 break;
             }
             case WB_DATA:
             case WB_EXEC: {
-                if (memwb_reg->stalled_out.uValue() == 1) {
-                    state = StageInfo::State::Stalled;
-                } else if (m_cycleCount > (WB_EXEC / 2) && memwb_reg->valid_out.uValue() == 0) {
-                    state = StageInfo::State::Flushed;
+                if (m_cycleCount > (WB_EXEC / 2)) {
+                    if (memwb_reg->valid_out.uValue() == 0) {
+                        state = StageInfo::State::Flushed;
+                    } else {
+                        if (stage == WB_EXEC) {
+                            state = memwb_reg->exec_valid_out.uValue() ? state : StageInfo::State::WayHazard;
+                        } else {
+                            state = memwb_reg->data_valid_out.uValue() ? state : StageInfo::State::WayHazard;
+                        }
+                    }
                 }
                 break;
             }
@@ -648,8 +704,8 @@ public:
     SparseArray& getArchRegisters() override { return *m_regMem; }
     void finalize(const FinalizeReason& fr) override {
         if (fr.exitSyscall && !ecallChecker->isSysCallExiting()) {
-            // An exit system call was executed. Record the cycle of the execution, and enable the ecallChecker's system
-            // call exiting signal.
+            // An exit system call was executed. Record the cycle of the execution, and enable the ecallChecker's
+            // system call exiting signal.
             m_syscallExitCycle = m_cycleCount;
         }
         ecallChecker->setSysCallExiting(ecallChecker->isSysCallExiting() || fr.exitSyscall);

@@ -64,6 +64,6 @@ private:
     QVariant instructionData(uint32_t addr) const;
 
     QStringList m_stageNames;
-    std::map<QString, StageInfo> m_stageInfos;
+    std::map<int, StageInfo> m_stageInfos;
 };
 }  // namespace Ripes

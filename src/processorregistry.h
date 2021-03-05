@@ -94,7 +94,7 @@ private:
         desc.description = "A 5-Stage in-order processor with hazard detection/elimination and forwarding.";
         desc.layouts = {{"Standard",
                          ":/layouts/RISC-V/rv5s/rv5s_standard_layout.json",
-                         {QPointF{0.08, 0}, QPointF{0.29, 0}, QPointF{0.55, 0}, QPointF{0.75, 0.87}}},
+                         {QPointF{0.08, 0}, QPointF{0.29, 0}, QPointF{0.55, 0}, QPointF{0.75, 0}, QPointF{0.87, 0}}},
                         {"Extended",
                          ":/layouts/RISC-V/rv5s/rv5s_extended_layout.json",
                          {QPointF{0.08, 0}, QPointF{0.28, 0}, QPointF{0.54, 0}, QPointF{0.78, 0}, QPointF{0.9, 0}}}};
@@ -111,8 +111,9 @@ private:
             "in parallel with a load/store instruction.";
         desc.layouts = {{"Extended",
                          ":/layouts/RISC-V/rv6s_dual/rv6s_dual_extended_layout.json",
-                         {{QPointF{0.08, 0}, QPointF{0.08, 1}, QPointF{0.29, 0}, QPointF{0.29, 1}, QPointF{0.54, 0},
-                           QPointF{0.54, 1}, QPointF{0.78, 0}, QPointF{0.78, 1}, QPointF{0.87, 0}, QPointF{0.87, 1}}}}};
+                         {{QPointF{0.06, 0}, QPointF{0.06, 1}, QPointF{0.22, 0}, QPointF{0.22, 1}, QPointF{0.35, 0},
+                           QPointF{0.35, 1}, QPointF{0.54, 0}, QPointF{0.54, 1}, QPointF{0.78, 0}, QPointF{0.78, 1},
+                           QPointF{0.87, 0}, QPointF{0.87, 1}}}}};
         desc.defaultRegisterVals = {{2, 0x7ffffff0}, {3, 0x10000000}};
         m_descriptions[desc.id] = desc;
 

@@ -72,10 +72,9 @@ public:
 
         ifid_reg->valid_out >> *wayhazard->in[0];
         waycontrol->stall_out >> *wayhazard->in[1];
-        wayhazard->out >> *wayhazard_inv->in[0];
 
         hzunit->hazardFEEnable >> *pc_enabled->in[0];
-        wayhazard_inv->out >> *pc_enabled->in[1];
+        wayhazard->out >> *pc_enabled->in[1];
         pc_enabled->out >> pc_reg->enable;
 
         alu->res >> pc_src->get(PcSrc::ALU);
@@ -530,8 +529,7 @@ public:
 
     // True if no hazard in the ID stage or no hazard unit induced stall
     SUBCOMPONENT(pc_enabled, TYPE(And<1, 2>));
-    SUBCOMPONENT(wayhazard, TYPE(And<1, 2>));
-    SUBCOMPONENT(wayhazard_inv, TYPE(Not<1, 1>));
+    SUBCOMPONENT(wayhazard, TYPE(Nand<1, 2>));
 
     // Address spaces
     ADDRESSSPACE(m_memory);
@@ -625,7 +623,7 @@ public:
                 if (m_cycleCount > (ID_1 / 2)) {
                     if (ifid_reg->valid_out.uValue() == 0) {
                         state = StageInfo::State::Flushed;
-                    } else if (stage == ID_2 && idii_reg->way_stall_out.uValue()) {
+                    } else if (stage == ID_1 && idii_reg->way_stall_out.uValue()) {
                         state = StageInfo::State::WayHazard;
                     }
                 }

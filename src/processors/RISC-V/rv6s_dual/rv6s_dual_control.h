@@ -9,6 +9,18 @@ namespace core {
 using namespace Ripes;
 
 class Control_DUAL : public Component {
+    static VSRTL_VT_U do_reg_wr_src_ctrl_dual(const VSRTL_VT_U& opc) {
+        switch (opc) {
+            // Jump instructions
+            case RVInstr::JALR:
+            case RVInstr::JAL:
+                return RegWrSrcDual::PC4;
+
+            default:
+                return RegWrSrcDual::ALURES;
+        }
+    }
+
 public:
     Control_DUAL(std::string name, SimComponent* parent) : Component(name, parent) {
         comp_ctrl << [=] { return exec_valid.uValue() ? Control::do_comp_ctrl(opcode_exec.uValue()) : CompOp::NOP; };
@@ -21,7 +33,7 @@ public:
         reg_do_write_ctrl_data <<
             [=] { return data_valid.uValue() && Control::do_reg_do_write_ctrl(opcode_data.uValue()); };
 
-        reg_wr_src_ctrl << [=] { return Control::do_reg_wr_src_ctrl(opcode_exec.uValue()); };
+        reg_wr_src_ctrl << [=] { return do_reg_wr_src_ctrl_dual(opcode_exec.uValue()); };
 
         alu_op1_ctrl_exec <<
             [=] { return exec_valid.uValue() ? Control::do_alu_op1_ctrl(opcode_exec.uValue()) : AluSrc1::REG1; };

@@ -248,16 +248,12 @@ public:
         funit->alu_reg2_fw_ctrl_data >> data_reg2_fw_src->select;
 
         // ALU operand multiplexers
-        data_reg1_fw_src->out >> alu_op1_data_src->get(AluSrc1::REG1);  // Todo: fix
-        iiex_reg->pc_out >> alu_op1_data_src->get(AluSrc1::PC);
-        iiex_reg->alu_op1_ctrl_data_out >> alu_op1_data_src->select;
-
         data_reg2_fw_src->out >> alu_op2_data_src->get(AluSrc2::REG2);  // Todo: fix
         iiex_reg->imm_data_out >> alu_op2_data_src->get(AluSrc2::IMM);
         iiex_reg->alu_op2_ctrl_data_out >> alu_op2_data_src->select;
 
         // ALU inputs
-        alu_op1_data_src->out >> alu_data->op1;
+        data_reg1_fw_src->out >> alu_data->op1;
         alu_op2_data_src->out >> alu_data->op2;
         iiex_reg->alu_ctrl_data_out >> alu_data->ctrl;
 
@@ -349,7 +345,6 @@ public:
         control->alu_op2_ctrl_exec >> iiex_reg->alu_op2_ctrl_in;
         control->alu_ctrl_exec >> iiex_reg->alu_ctrl_in;
 
-        control->alu_op1_ctrl_data >> iiex_reg->alu_op1_ctrl_data_in;
         control->alu_op2_ctrl_data >> iiex_reg->alu_op2_ctrl_data_in;
         control->alu_ctrl_data >> iiex_reg->alu_ctrl_data_in;
 
@@ -488,7 +483,6 @@ public:
     SUBCOMPONENT(pc_src, TYPE(EnumMultiplexer<PcSrc, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op1_exec_src, TYPE(EnumMultiplexer<AluSrc1, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op2_exec_src, TYPE(EnumMultiplexer<AluSrc2, RV_REG_WIDTH>));
-    SUBCOMPONENT(alu_op1_data_src, TYPE(EnumMultiplexer<AluSrc1, RV_REG_WIDTH>));
     SUBCOMPONENT(alu_op2_data_src, TYPE(EnumMultiplexer<AluSrc2, RV_REG_WIDTH>));
 
     SUBCOMPONENT(exec_reg1_fw_src, TYPE(EnumMultiplexer<ForwardingSrcDual, RV_REG_WIDTH>));

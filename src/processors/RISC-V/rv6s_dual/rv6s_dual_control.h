@@ -41,8 +41,6 @@ public:
             [=] { return exec_valid.uValue() ? Control::do_alu_op2_ctrl(opcode_exec.uValue()) : AluSrc2::REG2; };
         alu_ctrl_exec << [=] { return exec_valid.uValue() ? Control::do_alu_ctrl(opcode_exec.uValue()) : ALUOp::NOP; };
 
-        alu_op1_ctrl_data <<
-            [=] { return data_valid.uValue() ? Control::do_alu_op1_ctrl(opcode_data.uValue()) : AluSrc1::REG1; };
         alu_op2_ctrl_data <<
             [=] { return data_valid.uValue() ? Control::do_alu_op2_ctrl(opcode_data.uValue()) : AluSrc2::REG2; };
         alu_ctrl_data << [=] { return data_valid.uValue() ? Control::do_alu_ctrl(opcode_data.uValue()) : ALUOp::NOP; };
@@ -73,7 +71,6 @@ public:
     OUTPUTPORT_ENUM(alu_op2_ctrl_exec, AluSrc2);
     OUTPUTPORT_ENUM(alu_ctrl_exec, ALUOp);
 
-    OUTPUTPORT_ENUM(alu_op1_ctrl_data, AluSrc1);
     OUTPUTPORT_ENUM(alu_op2_ctrl_data, AluSrc2);
     OUTPUTPORT_ENUM(alu_ctrl_data, ALUOp);
 };

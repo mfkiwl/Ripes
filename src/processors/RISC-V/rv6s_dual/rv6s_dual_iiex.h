@@ -15,7 +15,6 @@ public:
         CONNECT_REGISTERED_CLEN_INPUT(wr_reg_idx_data, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(reg_do_write_data, clear, enable);
 
-        CONNECT_REGISTERED_CLEN_INPUT(alu_op1_ctrl_data, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(alu_op2_ctrl_data, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(alu_ctrl_data, clear, enable);
         CONNECT_REGISTERED_CLEN_INPUT(imm_data, clear, enable);
@@ -41,7 +40,6 @@ public:
 
     REGISTERED_CLEN_INPUT(imm_data, RV_REG_WIDTH);
 
-    REGISTERED_CLEN_INPUT(alu_op1_ctrl_data, AluSrc1::width());
     REGISTERED_CLEN_INPUT(alu_op2_ctrl_data, AluSrc2::width());
     REGISTERED_CLEN_INPUT(alu_ctrl_data, ALUOp::width());
 

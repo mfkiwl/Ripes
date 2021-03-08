@@ -20,8 +20,8 @@ public:
         r1_1_addr >> rf_1->r1_addr;
         r2_1_addr >> rf_1->r2_addr;
         wr_1_addr >> rf_1->wr_addr;
-        rf_1->r1_out >> r1_1_out;
-        rf_1->r2_out >> r2_1_out;
+        r1_1_out << [&] { return doReadBypass(r1_1_addr.uValue(), 1, rf_1); };
+        r2_1_out << [&] { return doReadBypass(r2_1_addr.uValue(), 2, rf_1); };
         data_1_in >> rf_1->data_in;
         wr_1_en >> rf_1->wr_en;
 
@@ -29,8 +29,8 @@ public:
         r1_2_addr >> rf_2->r1_addr;
         r2_2_addr >> rf_2->r2_addr;
         wr_2_addr >> rf_2->wr_addr;
-        rf_2->r1_out >> r1_2_out;
-        rf_2->r2_out >> r2_2_out;
+        r1_2_out << [&] { return doReadBypass(r1_2_addr.uValue(), 1, rf_2); };
+        r2_2_out << [&] { return doReadBypass(r2_2_addr.uValue(), 2, rf_2); };
         data_2_in >> rf_2->data_in;
         wr_2_en >> rf_2->wr_en;
     }
@@ -66,6 +66,25 @@ public:
     VSRTL_VT_U getRegister(unsigned i) { return m_memory->readMem<false>(i); }
 
 private:
+    /**
+     * Extra level of read bypassing to handle the fact that the RegisterFile class only bypasses with its internal
+     * signals, and is unaware of the dual-ported register file.
+     */
+    VSRTL_VT_U doReadBypass(const VSRTL_VT_U reg_idx, const int portIndex, const RegisterFile<readBypass>* rf) {
+        if (reg_idx == 0)
+            return static_cast<unsigned>(0);
+
+        const unsigned wr_idx1 = wr_1_addr.uValue();
+        const unsigned wr_idx2 = wr_2_addr.uValue();
+        if (wr_1_en.uValue() && wr_idx1 == reg_idx) {
+            return data_1_in.uValue();
+        } else if (wr_2_en.uValue() && wr_idx2 == reg_idx) {
+            return data_2_in.uValue();
+        } else {
+            return portIndex == 1 ? rf->r1_out.uValue() : rf->r2_out.uValue();
+        }
+    }
+
     SparseArray* m_memory = nullptr;
 };
 

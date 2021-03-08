@@ -73,8 +73,11 @@ public:
         ifid_reg->valid_out >> *wayhazard->in[0];
         waycontrol->stall_out >> *wayhazard->in[1];
 
+        wayhazard->out >> *wayhazarcf_or->in[0];
+        branch->did_controlflow >> *wayhazarcf_or->in[1];
+
         hzunit->hazardFEEnable >> *pc_enabled->in[0];
-        wayhazard->out >> *pc_enabled->in[1];
+        wayhazarcf_or->out >> *pc_enabled->in[1];
         pc_enabled->out >> pc_reg->enable;
 
         alu->res >> pc_src->get(PcSrc::ALU);
@@ -519,6 +522,9 @@ public:
     // True if above or stalling due to load-use hazard
     SUBCOMPONENT(efschz_or, TYPE(Or<1, 2>));
 
+    // True if no way hazard or doing control flow
+    SUBCOMPONENT(wayhazarcf_or, TYPE(Or<1, 2>));
+
     SUBCOMPONENT(mem_stalled_or, TYPE(Or<1, 2>));
 
     // True if no hazard in the ID stage or no hazard unit induced stall
@@ -745,7 +751,7 @@ public:
     }
 
     void reverse() override {
-        if (m_syscallExitCycle != -1 && (m_cycleCount - 1) == m_syscallExitCycle) {
+        if (m_syscallExitCycle != -1 && m_cycleCount == m_syscallExitCycle) {
             // We are about to undo an exit syscall instruction. In this case, the syscall exiting sequence should
             // be terminate
             ecallChecker->setSysCallExiting(false);

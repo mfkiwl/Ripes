@@ -17,6 +17,10 @@ namespace Ripes {
 #define RIPES_SETTING_CONSOLEFONTCOLOR ("console_font_color")
 #define RIPES_SETTING_CONSOLEFONT ("console_font")
 
+#define RIPES_SETTING_ASSEMBLER_TEXTSTART ("text_start")
+#define RIPES_SETTING_ASSEMBLER_DATASTART ("data_start")
+#define RIPES_SETTING_ASSEMBLER_BSSSTART ("bss_start")
+
 // Program state preserving settings
 #define RIPES_SETTING_SETTING_TAB ("settings_tab")
 #define RIPES_SETTING_VIEW_ZOOM ("view_zoom")
@@ -36,6 +40,10 @@ const static std::map<QString, QVariant> s_defaultSettings = {
     {RIPES_SETTING_CONSOLEFONTCOLOR, QColor(Qt::black)},
     {RIPES_SETTING_CONSOLEFONT, QVariant() /* Let Console define its own default font */},
     {RIPES_SETTING_CONSOLEFONT, QColor(Qt::black)},
+
+    {RIPES_SETTING_ASSEMBLER_TEXTSTART, 0x0},
+    {RIPES_SETTING_ASSEMBLER_DATASTART, 0x10000000},
+    {RIPES_SETTING_ASSEMBLER_BSSSTART, 0x11000000},
 
     // Program state preserving settings
     {RIPES_SETTING_SETTING_TAB, 0},

@@ -1,5 +1,6 @@
 #include "rv32i_assembler.h"
 #include "gnudirectives.h"
+#include "ripessettings.h"
 
 #include <QByteArray>
 #include <algorithm>
@@ -7,14 +8,22 @@
 namespace Ripes {
 namespace Assembler {
 
-RV32I_Assembler::RV32I_Assembler(const ISAInfo<ISA::RV32I>* isa) : Assembler(isa) {
+RV32I_Assembler::RV32I_Assembler(const ISAInfo<ISA::RV32I>* isa) : QObject(nullptr), Assembler(isa) {
     auto [instrs, pseudos, directives] = initInstructions(isa);
     initialize(instrs, pseudos, directives);
 
     // Initialize segment pointers
-    setSegmentBase(".text", 0x0);
-    setSegmentBase(".data", 0x10000000);
-    setSegmentBase(".bss", 0x11000000);
+    setSegmentBase(".text", RipesSettings::value(RIPES_SETTING_ASSEMBLER_TEXTSTART).toUInt());
+    setSegmentBase(".data", RipesSettings::value(RIPES_SETTING_ASSEMBLER_DATASTART).toUInt());
+    setSegmentBase(".bss", RipesSettings::value(RIPES_SETTING_ASSEMBLER_BSSSTART).toUInt());
+
+    // Monitor settings changes to segment pointers
+    connect(RipesSettings::getObserver(RIPES_SETTING_ASSEMBLER_TEXTSTART), &SettingObserver::modified,
+            [this](const QVariant& value) { setSegmentBase(".text", value.toUInt()); });
+    connect(RipesSettings::getObserver(RIPES_SETTING_ASSEMBLER_DATASTART), &SettingObserver::modified,
+            [this](const QVariant& value) { setSegmentBase(".data", value.toUInt()); });
+    connect(RipesSettings::getObserver(RIPES_SETTING_ASSEMBLER_BSSSTART), &SettingObserver::modified,
+            [this](const QVariant& value) { setSegmentBase(".bss", value.toUInt()); });
 }
 
 std::tuple<InstrVec, PseudoInstrVec, DirectiveVec>
@@ -41,61 +50,61 @@ RV32I_Assembler::initInstructions(const ISAInfo<ISA::RV32I>* isa) const {
 #define BType(name, funct3)                                                                              \
     std::shared_ptr<Instruction>(new Instruction(                                                        \
         Opcode(name, {OpPart(0b1100011, 0, 6), OpPart(funct3, 12, 14)}),                                 \
-        {std::make_shared<Reg>(isa, 1, 15, 19, "rs1"), std::make_shared<Reg>(isa, 2, 20, 24, "rs2"),                   \
+        {std::make_shared<Reg>(isa, 1, 15, 19, "rs1"), std::make_shared<Reg>(isa, 2, 20, 24, "rs2"),     \
          std::make_shared<Imm>(                                                                          \
              3, 13, Imm::Repr::Signed,                                                                   \
              std::vector{ImmPart(12, 31, 31), ImmPart(11, 7, 7), ImmPart(5, 25, 30), ImmPart(1, 8, 11)}, \
              Imm::SymbolType::Relative)}))
 
-#define IType(name, funct3)                                                                           \
-    std::shared_ptr<Instruction>(                                                                     \
-        new Instruction(Opcode(name, {OpPart(0b0010011, 0, 6), OpPart(funct3, 12, 14)}),              \
+#define IType(name, funct3)                                                                                        \
+    std::shared_ptr<Instruction>(                                                                                  \
+        new Instruction(Opcode(name, {OpPart(0b0010011, 0, 6), OpPart(funct3, 12, 14)}),                           \
                         {std::make_shared<Reg>(isa, 1, 7, 11, "rd"), std::make_shared<Reg>(isa, 2, 15, 19, "rs1"), \
                          std::make_shared<Imm>(3, 12, Imm::Repr::Signed, std::vector{ImmPart(0, 20, 31)})}))
 
-#define LoadType(name, funct3)                                                                        \
-    std::shared_ptr<Instruction>(                                                                     \
-        new Instruction(Opcode(name, {OpPart(0b0000011, 0, 6), OpPart(funct3, 12, 14)}),              \
+#define LoadType(name, funct3)                                                                                     \
+    std::shared_ptr<Instruction>(                                                                                  \
+        new Instruction(Opcode(name, {OpPart(0b0000011, 0, 6), OpPart(funct3, 12, 14)}),                           \
                         {std::make_shared<Reg>(isa, 1, 7, 11, "rd"), std::make_shared<Reg>(isa, 3, 15, 19, "rs1"), \
                          std::make_shared<Imm>(2, 12, Imm::Repr::Signed, std::vector{ImmPart(0, 20, 31)})}))
 
-#define IShiftType(name, funct3, funct7)                                                                         \
-    std::shared_ptr<Instruction>(                                                                                \
-        new Instruction(Opcode(name, {OpPart(0b0010011, 0, 6), OpPart(funct3, 12, 14), OpPart(funct7, 25, 31)}), \
-                        {std::make_shared<Reg>(isa, 1, 7, 11, "rd"), std::make_shared<Reg>(isa, 2, 15, 19, "rs1"),            \
+#define IShiftType(name, funct3, funct7)                                                                           \
+    std::shared_ptr<Instruction>(                                                                                  \
+        new Instruction(Opcode(name, {OpPart(0b0010011, 0, 6), OpPart(funct3, 12, 14), OpPart(funct7, 25, 31)}),   \
+                        {std::make_shared<Reg>(isa, 1, 7, 11, "rd"), std::make_shared<Reg>(isa, 2, 15, 19, "rs1"), \
                          std::make_shared<Imm>(3, 5, Imm::Repr::Unsigned, std::vector{ImmPart(0, 20, 24)})}))
 
-#define RType(name, funct3, funct7)                                                                              \
-    std::shared_ptr<Instruction>(                                                                                \
-        new Instruction(Opcode(name, {OpPart(0b0110011, 0, 6), OpPart(funct3, 12, 14), OpPart(funct7, 25, 31)}), \
-                        {std::make_shared<Reg>(isa, 1, 7, 11, "rd"), std::make_shared<Reg>(isa, 2, 15, 19, "rs1"),            \
+#define RType(name, funct3, funct7)                                                                                \
+    std::shared_ptr<Instruction>(                                                                                  \
+        new Instruction(Opcode(name, {OpPart(0b0110011, 0, 6), OpPart(funct3, 12, 14), OpPart(funct7, 25, 31)}),   \
+                        {std::make_shared<Reg>(isa, 1, 7, 11, "rd"), std::make_shared<Reg>(isa, 2, 15, 19, "rs1"), \
                          std::make_shared<Reg>(isa, 3, 20, 24, "rs2")}))
 
 #define SType(name, funct3)                                                                                   \
     std::shared_ptr<Instruction>(new Instruction(                                                             \
         Opcode(name, {OpPart(0b0100011, 0, 6), OpPart(funct3, 12, 14)}),                                      \
-        {std::make_shared<Reg>(isa, 3, 15, 19, "rs1"),                                                               \
+        {std::make_shared<Reg>(isa, 3, 15, 19, "rs1"),                                                        \
          std::make_shared<Imm>(2, 12, Imm::Repr::Signed, std::vector{ImmPart(5, 25, 31), ImmPart(0, 7, 11)}), \
          std::make_shared<Reg>(isa, 1, 20, 24, "rs2")}))
 
-#define UType(name, opcode)                                    \
-    std::shared_ptr<Instruction>(                              \
-        new Instruction(Opcode(name, {OpPart(opcode, 0, 6)}),  \
+#define UType(name, opcode)                                          \
+    std::shared_ptr<Instruction>(                                    \
+        new Instruction(Opcode(name, {OpPart(opcode, 0, 6)}),        \
                         {std::make_shared<Reg>(isa, 1, 7, 11, "rd"), \
                          std::make_shared<Imm>(2, 32, Imm::Repr::Hex, std::vector{ImmPart(0, 12, 31)})}))
 
 #define JType(name, opcode)                                                                                  \
     std::shared_ptr<Instruction>(new Instruction(                                                            \
         Opcode(name, {OpPart(opcode, 0, 6)}),                                                                \
-        {std::make_shared<Reg>(isa, 1, 7, 11, "rd"),                                                               \
+        {std::make_shared<Reg>(isa, 1, 7, 11, "rd"),                                                         \
          std::make_shared<Imm>(                                                                              \
              2, 21, Imm::Repr::Signed,                                                                       \
              std::vector{ImmPart(20, 31, 31), ImmPart(12, 12, 19), ImmPart(11, 20, 20), ImmPart(1, 21, 30)}, \
              Imm::SymbolType::Relative)}))
 
-#define JALRType(name)                                                                                \
-    std::shared_ptr<Instruction>(                                                                     \
-        new Instruction(Opcode(name, {OpPart(0b1100111, 0, 6), OpPart(0b000, 12, 14)}),               \
+#define JALRType(name)                                                                                             \
+    std::shared_ptr<Instruction>(                                                                                  \
+        new Instruction(Opcode(name, {OpPart(0b1100111, 0, 6), OpPart(0b000, 12, 14)}),                            \
                         {std::make_shared<Reg>(isa, 1, 7, 11, "rd"), std::make_shared<Reg>(isa, 2, 15, 19, "rs1"), \
                          std::make_shared<Imm>(3, 12, Imm::Repr::Signed, std::vector{ImmPart(0, 20, 31)})}))
 

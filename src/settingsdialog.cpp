@@ -16,6 +16,7 @@
 #include <QSpacerItem>
 #include <QSpinBox>
 #include <QStackedWidget>
+#include "utilities/hexspinbox.h"
 
 namespace Ripes {
 
@@ -43,6 +44,10 @@ std::pair<QLabel*, T_TriggerWidget*> createSettingsWidgets(const QString& settin
         // Ensure that the current value can be represented in the spinbox. It is expected that the spinbox range will
         // be specified after being created in this function.
         widget->setRange(INT_MIN, INT_MAX);
+        widget->setValue(settingObserver->value().toUInt());
+        widget->connect(widget, QOverload<int>::of(&QSpinBox::valueChanged), settingObserver,
+                        &SettingObserver::setValue);
+    } else if constexpr (std::is_same<T_EditWidget, HexSpinBox>()) {
         widget->setValue(settingObserver->value().toUInt());
         widget->connect(widget, QOverload<int>::of(&QSpinBox::valueChanged), settingObserver,
                         &SettingObserver::setValue);
@@ -134,6 +139,10 @@ void SettingsDialog::accept() {
 QWidget* SettingsDialog::createEditorPage() {
     auto [pageWidget, pageLayout] = constructPage();
 
+    /***********************************************************************
+     * Compiler settings
+     **********************************************************************/
+
     // Setting: RIPES_SETTING_CCPATH
     CCManager::get();
 
@@ -204,6 +213,23 @@ QWidget* SettingsDialog::createEditorPage() {
 
     // Trigger initial rehighlighting
     CCManager::get().trySetCC(m_ccpath->text());
+
+    /***********************************************************************
+     * Assembler settings
+     **********************************************************************/
+
+    auto* ASMGroupBox = new QGroupBox("Assembler");
+    auto* ASMLayout = new QGridLayout();
+    ASMGroupBox->setLayout(ASMLayout);
+
+    appendToLayout(createSettingsWidgets<HexSpinBox>(RIPES_SETTING_ASSEMBLER_TEXTSTART, ".text section start address:"),
+                   ASMLayout);
+    appendToLayout(createSettingsWidgets<HexSpinBox>(RIPES_SETTING_ASSEMBLER_DATASTART, ".data section start address:"),
+                   ASMLayout);
+    appendToLayout(createSettingsWidgets<HexSpinBox>(RIPES_SETTING_ASSEMBLER_BSSSTART, ".bss section start address:"),
+                   ASMLayout);
+
+    pageLayout->addWidget(ASMGroupBox);
 
     return pageWidget;
 }
@@ -277,6 +303,12 @@ QWidget* SettingsDialog::createEnvironmentPage() {
     pageLayout->addWidget(consoleGroupBox);
 
     return pageWidget;
+}
+
+void SettingsDialog::appendToLayout(std::pair<QLabel*, QWidget*> settingsWidgets, QGridLayout* pageLayout) {
+    const unsigned row = pageLayout->rowCount();
+    pageLayout->addWidget(settingsWidgets.first, row, 0);
+    pageLayout->addWidget(settingsWidgets.second, row, 1);
 }
 
 void SettingsDialog::addPage(const QString& name, QWidget* page) {

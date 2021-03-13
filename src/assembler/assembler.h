@@ -255,6 +255,7 @@ public:
         runPass(unused, NoPassResult, pass3, program, symbolMap, needsLinkage);
 
         result.program = program;
+        result.program.entryPoint = m_sectionBasePointers.at(".text");
         return result;
     }
 
